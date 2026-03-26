@@ -1,7 +1,10 @@
 {
   "name": "@okrlinkhub/page-feedback",
   "description": "A page feedback component for Convex.",
-  "repository": "github:primocaredentgroup/page-feedback",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/primocaredentgroup/page-feedback.git"
+  },
   "homepage": "https://github.com/primocaredentgroup/page-feedback#readme",
   "bugs": {
     "url": "https://github.com/primocaredentgroup/page-feedback/issues"
