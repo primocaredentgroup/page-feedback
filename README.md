@@ -14,6 +14,12 @@ feedback thread host:
 - linear discussion comments
 - emoji reactions on comments
 
+It also supports a shared page-purpose layer per `normalizedUrl` with:
+
+- ordered `objectives` describing what the page should achieve
+- lightweight `indicators` attached to each objective
+- discussion threads attached to each objective
+
 It also includes a singleton `settings` record for optional bug-report and
 improvement-request URLs controlled by the consumer app.
 
@@ -53,8 +59,14 @@ export const {
   upsertFeedback,
   listFeedbackVersions,
   listLatestFeedbackForUrl,
+  listObjectivesForUrl,
+  upsertObjective,
+  listIndicatorsForObjective,
+  upsertIndicator,
   listComments,
+  listObjectiveComments,
   addComment,
+  addObjectiveComment,
   editComment,
   deleteComment,
   getCommentReactions,
@@ -85,12 +97,15 @@ See more example usage in [example.ts](./example/convex/example.ts).
 
 ## Data model
 
-The component stores data in five tables:
+The component stores data in eight tables:
 
 - `feedbackThreads`: latest feedback snapshot for each `userId + normalizedUrl`
 - `feedbackVersions`: append-only history for each feedback thread
 - `feedbackComments`: linear discussion messages attached to a feedback thread
 - `feedbackReactions`: emoji reactions attached to a feedback comment
+- `pageObjectives`: shared objectives for a normalized page URL
+- `objectiveIndicators`: ordered indicators for a single objective
+- `objectiveComments`: discussion messages attached to a page objective
 - `settings`: singleton configuration document keyed internally as `global`
 
 The URL is normalized inside both the component and the client wrapper by taking
@@ -104,8 +119,14 @@ The installed component exposes these public functions:
 - `lib.getMyFeedback({ userId, url })`
 - `lib.listFeedbackVersions({ userId, url, limit? })`
 - `lib.listLatestFeedbackForUrl({ url, limit? })`
+- `lib.listObjectivesForUrl({ url })`
+- `lib.upsertObjective({ objectiveId?, url, description, status, order })`
+- `lib.listIndicatorsForObjective({ objectiveId })`
+- `lib.upsertIndicator({ indicatorId?, objectiveId, description, order })`
 - `lib.listComments({ threadId, limit?, currentUserId? })`
+- `lib.listObjectiveComments({ objectiveId, limit? })`
 - `lib.addComment({ userId, threadId, body })`
+- `lib.addObjectiveComment({ userId, objectiveId, body })`
 - `lib.editComment({ userId, commentId, body })`
 - `lib.deleteComment({ userId, commentId })`
 - `lib.getCommentReactions({ commentId, currentUserId? })`

@@ -13,12 +13,15 @@ const nullableStringValidator = v.union(v.string(), v.null());
 
 type UserOperation =
   | { type: "readMyFeedback"; normalizedUrl: string }
+  | { type: "readObjectives"; normalizedUrl: string }
   | { type: "readMyFeedbackThreads" }
   | { type: "writeFeedback"; normalizedUrl: string }
   | { type: "readFeedbackVersions"; normalizedUrl: string }
   | { type: "readComments"; threadId: string }
+  | { type: "readObjectiveComments"; objectiveId: string }
   | { type: "readCommentReactions"; commentId: string }
   | { type: "writeComment"; threadId: string }
+  | { type: "writeObjectiveComment"; objectiveId: string }
   | { type: "editComment"; commentId: string }
   | { type: "deleteComment"; commentId: string }
   | { type: "reactToComment"; commentId: string };
@@ -102,6 +105,74 @@ export function exposeApi(
       },
     }),
 
+    listObjectivesForUrl: queryGeneric({
+      args: {
+        url: v.string(),
+      },
+      handler: async (ctx, args) => {
+        const normalizedUrl = normalizeFeedbackUrl(args.url);
+        await options.auth(ctx, {
+          type: "readObjectives",
+          normalizedUrl,
+        });
+
+        return await ctx.runQuery(component.lib.listObjectivesForUrl, {
+          url: normalizedUrl,
+        });
+      },
+    }),
+
+    upsertObjective: mutationGeneric({
+      args: {
+        objectiveId: v.optional(v.string()),
+        url: v.string(),
+        description: v.string(),
+        status: v.union(v.literal("active"), v.literal("archived")),
+        order: v.number(),
+      },
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, ctx);
+
+        return await ctx.runMutation(component.lib.upsertObjective, {
+          objectiveId: args.objectiveId,
+          url: normalizeFeedbackUrl(args.url),
+          description: args.description,
+          status: args.status,
+          order: args.order,
+        });
+      },
+    }),
+
+    listIndicatorsForObjective: queryGeneric({
+      args: {
+        objectiveId: v.string(),
+      },
+      handler: async (ctx, args) => {
+        return await ctx.runQuery(component.lib.listIndicatorsForObjective, {
+          objectiveId: args.objectiveId,
+        });
+      },
+    }),
+
+    upsertIndicator: mutationGeneric({
+      args: {
+        indicatorId: v.optional(v.string()),
+        objectiveId: v.string(),
+        description: v.string(),
+        order: v.number(),
+      },
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, ctx);
+
+        return await ctx.runMutation(component.lib.upsertIndicator, {
+          indicatorId: args.indicatorId,
+          objectiveId: args.objectiveId,
+          description: args.description,
+          order: args.order,
+        });
+      },
+    }),
+
     listMyFeedbackThreads: queryGeneric({
       args: {
         limit: v.optional(v.number()),
@@ -137,6 +208,24 @@ export function exposeApi(
       },
     }),
 
+    listObjectiveComments: queryGeneric({
+      args: {
+        objectiveId: v.string(),
+        limit: v.optional(v.number()),
+      },
+      handler: async (ctx, args) => {
+        await options.auth(ctx, {
+          type: "readObjectiveComments",
+          objectiveId: args.objectiveId,
+        });
+
+        return await ctx.runQuery(component.lib.listObjectiveComments, {
+          objectiveId: args.objectiveId,
+          limit: args.limit,
+        });
+      },
+    }),
+
     addComment: mutationGeneric({
       args: {
         threadId: v.string(),
@@ -151,6 +240,25 @@ export function exposeApi(
         return await ctx.runMutation(component.lib.addComment, {
           userId,
           threadId: args.threadId,
+          body: args.body,
+        });
+      },
+    }),
+
+    addObjectiveComment: mutationGeneric({
+      args: {
+        objectiveId: v.string(),
+        body: v.string(),
+      },
+      handler: async (ctx, args) => {
+        const userId = await options.auth(ctx, {
+          type: "writeObjectiveComment",
+          objectiveId: args.objectiveId,
+        });
+
+        return await ctx.runMutation(component.lib.addObjectiveComment, {
+          userId,
+          objectiveId: args.objectiveId,
           body: args.body,
         });
       },

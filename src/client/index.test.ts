@@ -7,14 +7,21 @@ export const {
   getMyFeedback,
   upsertFeedback,
   listFeedbackVersions,
+  listObjectivesForUrl,
+  upsertObjective,
+  listIndicatorsForObjective,
+  upsertIndicator,
   listMyFeedbackThreads,
   listComments,
+  listObjectiveComments,
   addComment,
+  addObjectiveComment,
   toggleReaction,
 } = exposeApi(components.pageFeedback, {
   auth: async (ctx, _operation) => {
     return (await ctx.auth.getUserIdentity())?.tokenIdentifier ?? 'anonymous'
   },
+  adminAuth: async () => {},
 })
 
 const testApi = (
@@ -23,9 +30,15 @@ const testApi = (
       getMyFeedback: typeof getMyFeedback;
       upsertFeedback: typeof upsertFeedback;
       listFeedbackVersions: typeof listFeedbackVersions;
+      listObjectivesForUrl: typeof listObjectivesForUrl;
+      upsertObjective: typeof upsertObjective;
+      listIndicatorsForObjective: typeof listIndicatorsForObjective;
+      upsertIndicator: typeof upsertIndicator;
       listMyFeedbackThreads: typeof listMyFeedbackThreads;
       listComments: typeof listComments;
+      listObjectiveComments: typeof listObjectiveComments;
       addComment: typeof addComment;
+      addObjectiveComment: typeof addObjectiveComment;
       toggleReaction: typeof toggleReaction;
     };
   }>
@@ -116,5 +129,47 @@ describe('client tests', () => {
     expect(threads).toHaveLength(1)
     expect(threads[0].rating).toBe(3)
     expect(threads[0].note).toBe('ok')
+  })
+
+  test('should be able to use wrapped objectives api', async () => {
+    const t = initConvexTest().withIdentity({
+      tokenIdentifier: 'user1',
+      subject: 'user1',
+    })
+    const url = 'https://app.example.com/settings?tab=profile'
+
+    const objective = await t.mutation(testApi.upsertObjective, {
+      url,
+      description: 'La pagina deve spiegare subito dove si trova l utente.',
+      status: 'active',
+      order: 0,
+    })
+
+    await t.mutation(testApi.upsertIndicator, {
+      objectiveId: objective._id,
+      description: 'Il titolo spiega il contesto in meno di una riga.',
+      order: 0,
+    })
+
+    await t.mutation(testApi.addObjectiveComment, {
+      objectiveId: objective._id,
+      body: 'Questo objective rende bene il focus della pagina.',
+    })
+
+    const objectives = await t.query(testApi.listObjectivesForUrl, { url })
+    const indicators = await t.query(testApi.listIndicatorsForObjective, {
+      objectiveId: objective._id,
+    })
+    const comments = await t.query(testApi.listObjectiveComments, {
+      objectiveId: objective._id,
+      limit: 10,
+    })
+
+    expect(objectives).toHaveLength(1)
+    expect(objectives[0].normalizedUrl).toBe('https://app.example.com/settings')
+    expect(indicators[0].description).toBe(
+      'Il titolo spiega il contesto in meno di una riga.',
+    )
+    expect(comments[0].authorId).toBe('user1')
   })
 })

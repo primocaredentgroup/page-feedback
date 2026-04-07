@@ -1,5 +1,5 @@
 import './App.css'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
 
@@ -27,6 +27,53 @@ const DEMO_PAGES = [
   },
 ] as const
 
+const DEMO_OBJECTIVES: Record<
+  string,
+  Array<{
+    description: string
+    indicators: string[]
+  }>
+> = {
+  'https://demo.page-feedback.app/contenuti/primo': [
+    {
+      description:
+        'La pagina deve chiarire immediatamente il tema principale e il valore del contenuto.',
+      indicators: [
+        'Il titolo rende chiaro l argomento appena si apre la pagina.',
+        'Le prime righe fanno capire a chi e` utile questo contenuto.',
+      ],
+    },
+    {
+      description:
+        'La pagina deve dare una buona ragione per scorrere e approfondire.',
+      indicators: [
+        'L introduzione promette un beneficio concreto per chi legge.',
+        'La struttura visiva fa intuire cosa si trovera` piu` sotto.',
+      ],
+    },
+  ],
+  'https://demo.page-feedback.app/contenuti/secondo': [
+    {
+      description:
+        'La pagina deve aiutare l utente a capire cosa puo` fare subito dopo.',
+      indicators: [
+        'Esiste una call to action principale facile da riconoscere.',
+        'Il passo successivo sembra coerente con il contenuto appena letto.',
+      ],
+    },
+  ],
+  'https://demo.page-feedback.app/contenuti/terzo': [
+    {
+      description:
+        'La pagina deve far percepire che le informazioni sono credibili e ben curate.',
+      indicators: [
+        'Ci sono segnali che spiegano da dove arrivano le informazioni.',
+        'Il tono e la struttura fanno percepire ordine e chiarezza.',
+      ],
+    },
+  ],
+}
+
 type RouteId = (typeof DEMO_PAGES)[number]['id'] | 'feedbacks'
 
 const MOODS = [
@@ -49,11 +96,584 @@ function pageTitleForNormalizedUrl (normalizedUrl: string) {
   return page?.title ?? normalizedUrl
 }
 
+function ObjectiveIndicatorsEditor ({
+  objectiveId,
+  editable,
+}: {
+  objectiveId: string
+  editable: boolean
+}) {
+  const indicators = useQuery(api.example.listIndicatorsForObjective, { objectiveId })
+  const upsertIndicator = useMutation(api.example.upsertIndicator)
+  const [indicatorFormMode, setIndicatorFormMode] = useState<'none' | 'add' | 'edit'>('none')
+  const [editingIndicatorId, setEditingIndicatorId] = useState<string | null>(null)
+  const [indicatorFormDescription, setIndicatorFormDescription] = useState('')
+  const [isSavingIndicator, setIsSavingIndicator] = useState(false)
+
+  const nextIndicatorOrder = useMemo(() => {
+    if (!indicators?.length) {
+      return 0
+    }
+    return indicators.reduce((max, row) => Math.max(max, row.order), -1) + 1
+  }, [indicators])
+
+  useEffect(() => {
+    setIndicatorFormMode('none')
+    setEditingIndicatorId(null)
+    setIndicatorFormDescription('')
+  }, [objectiveId])
+
+  function openAddIndicatorForm () {
+    setIndicatorFormMode('add')
+    setEditingIndicatorId(null)
+    setIndicatorFormDescription('')
+  }
+
+  function openEditIndicatorForm (indicatorId: string, description: string) {
+    setIndicatorFormMode('edit')
+    setEditingIndicatorId(indicatorId)
+    setIndicatorFormDescription(description)
+  }
+
+  function closeIndicatorForm () {
+    setIndicatorFormMode('none')
+    setEditingIndicatorId(null)
+    setIndicatorFormDescription('')
+  }
+
+  async function handleSaveIndicatorForm () {
+    const description = indicatorFormDescription.trim()
+    if (!description) {
+      return
+    }
+    setIsSavingIndicator(true)
+    try {
+      if (indicatorFormMode === 'add') {
+        await upsertIndicator({
+          objectiveId,
+          description,
+          order: nextIndicatorOrder,
+        })
+      } else if (
+        indicatorFormMode === 'edit' &&
+        editingIndicatorId !== null
+      ) {
+        const row = indicators?.find((i) => i._id === editingIndicatorId)
+        await upsertIndicator({
+          indicatorId: editingIndicatorId,
+          objectiveId,
+          description,
+          order: row?.order ?? 0,
+        })
+      }
+      closeIndicatorForm()
+    } finally {
+      setIsSavingIndicator(false)
+    }
+  }
+
+  if (indicators === undefined) {
+    return <p className='muted'>Caricamento indicatori…</p>
+  }
+
+  if (!editable) {
+    if (indicators.length === 0) {
+      return <p className='muted objectiveEmptyState'>Nessun indicatore ancora definito.</p>
+    }
+    return (
+      <div className='objectiveIndicatorList'>
+        {indicators.map((indicator, index) => (
+          <article key={indicator._id} className='objectiveIndicatorCard'>
+            <div className='objectiveIndicatorIndex'>{index + 1}</div>
+            <div className='objectiveIndicatorBody'>
+              <div className='objectiveIndicatorLabel'>Indicatore {index + 1}</div>
+              <div className='objectiveIndicatorText'>{indicator.description}</div>
+            </div>
+          </article>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className='indicatorEditor'>
+      <div className='indicatorEditorToolbar'>
+        <button
+          type='button'
+          className='textLinkBtn objectiveHeaderBtn'
+          onClick={openAddIndicatorForm}
+        >
+          + Aggiungi indicatore
+        </button>
+      </div>
+
+      {indicatorFormMode !== 'none' && (
+        <div className='indicatorFormCard'>
+          <h4 className='indicatorFormTitle'>
+            {indicatorFormMode === 'add' ? 'Nuovo indicatore' : 'Modifica indicatore'}
+          </h4>
+          <label className='fieldLabel' htmlFor={`indicator-form-${objectiveId}`}>
+            Descrizione
+          </label>
+          <textarea
+            id={`indicator-form-${objectiveId}`}
+            className='dialogTextarea'
+            rows={3}
+            value={indicatorFormDescription}
+            onChange={(e) => setIndicatorFormDescription(e.target.value)}
+            placeholder='Come capire se la pagina rispetta questo criterio…'
+          />
+          <div className='objectiveFormActions'>
+            <button
+              type='button'
+              className='secondaryBtn'
+              disabled={isSavingIndicator}
+              onClick={closeIndicatorForm}
+            >
+              Annulla
+            </button>
+            <button
+              type='button'
+              className='primaryBtn primaryBtnInline'
+              disabled={isSavingIndicator || !indicatorFormDescription.trim()}
+              onClick={handleSaveIndicatorForm}
+            >
+              {isSavingIndicator ? 'Salvataggio…' : 'Salva'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {indicators.length === 0 && indicatorFormMode === 'none' && (
+        <p className='muted objectiveEmptyState'>Nessun indicatore ancora definito.</p>
+      )}
+
+      <div className='objectiveIndicatorList'>
+        {indicators.map((indicator, index) => (
+          <article key={indicator._id} className='objectiveIndicatorCard'>
+            <div className='objectiveIndicatorIndex'>{index + 1}</div>
+            <div className='objectiveIndicatorBody'>
+              <div className='objectiveIndicatorRowHead'>
+                <div className='objectiveIndicatorLabel'>Indicatore {index + 1}</div>
+                <button
+                  type='button'
+                  className='textLinkBtn objectiveHeaderBtn'
+                  onClick={() =>
+                    openEditIndicatorForm(indicator._id, indicator.description)}
+                >
+                  Modifica
+                </button>
+              </div>
+              <div className='objectiveIndicatorText'>{indicator.description}</div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PageObjectivesContent ({
+  pageUrl,
+  pageTitle,
+  inDialog = false,
+}: {
+  pageUrl: string
+  pageTitle: string
+  inDialog?: boolean
+}) {
+  const objectives = useQuery(api.example.listObjectivesForUrl, { url: pageUrl })
+  const upsertObjective = useMutation(api.example.upsertObjective)
+  const upsertIndicator = useMutation(api.example.upsertIndicator)
+  const addObjectiveComment = useMutation(api.example.addObjectiveComment)
+  const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null)
+  const [detailSubTab, setDetailSubTab] = useState<'indicators' | 'thread'>('indicators')
+  const [objectiveFormMode, setObjectiveFormMode] = useState<'none' | 'add' | 'edit'>('none')
+  const [formDescription, setFormDescription] = useState('')
+  const [isSavingObjective, setIsSavingObjective] = useState(false)
+  const [replyBody, setReplyBody] = useState('')
+  const seededUrlsRef = useRef<Set<string>>(new Set())
+  const normalizedPageUrl = normalizeUrl(pageUrl)
+  const objectiveSeed = useMemo(
+    () => DEMO_OBJECTIVES[normalizedPageUrl] ?? [],
+    [normalizedPageUrl],
+  )
+
+  const visibleObjectives = useMemo(
+    () => objectives?.filter((objective) => objective.status === 'active') ?? [],
+    [objectives],
+  )
+
+  const effectiveSelectedObjectiveId =
+    selectedObjectiveId !== null &&
+    visibleObjectives.some((objective) => objective._id === selectedObjectiveId)
+      ? selectedObjectiveId
+      : (visibleObjectives[0]?._id ?? null)
+
+  const objectiveComments = useQuery(
+    api.example.listObjectiveComments,
+    effectiveSelectedObjectiveId
+      ? { objectiveId: effectiveSelectedObjectiveId, limit: 50 }
+      : 'skip',
+  )
+
+  const selectedObjective = visibleObjectives.find(
+    (objective) => objective._id === effectiveSelectedObjectiveId,
+  ) ?? null
+  const visibleObjectiveComments = useMemo(
+    () => objectiveComments?.filter((comment) => !comment.isDeleted) ?? [],
+    [objectiveComments],
+  )
+
+  const nextObjectiveOrder = useMemo(() => {
+    if (!objectives?.length) {
+      return 0
+    }
+    return objectives.reduce((max, o) => Math.max(max, o.order), -1) + 1
+  }, [objectives])
+
+  useEffect(() => {
+    setDetailSubTab('indicators')
+  }, [effectiveSelectedObjectiveId])
+
+  useEffect(() => {
+    if (
+      objectives === undefined ||
+      objectives.length > 0 ||
+      objectiveSeed.length === 0 ||
+      seededUrlsRef.current.has(normalizedPageUrl)
+    ) {
+      return
+    }
+
+    seededUrlsRef.current.add(normalizedPageUrl)
+
+    void (async () => {
+      for (const [objectiveIndex, objectiveSeedRow] of objectiveSeed.entries()) {
+        const objective = await upsertObjective({
+          url: pageUrl,
+          description: objectiveSeedRow.description,
+          status: 'active',
+          order: objectiveIndex,
+        })
+
+        for (const [indicatorIndex, indicatorDescription] of objectiveSeedRow.indicators.entries()) {
+          await upsertIndicator({
+            objectiveId: objective._id,
+            description: indicatorDescription,
+            order: indicatorIndex,
+          })
+        }
+      }
+    })()
+  }, [
+    normalizedPageUrl,
+    objectiveSeed,
+    objectives,
+    pageUrl,
+    upsertIndicator,
+    upsertObjective,
+  ])
+
+  async function handleAddObjectiveComment () {
+    if (!effectiveSelectedObjectiveId || !replyBody.trim()) {
+      return
+    }
+
+    await addObjectiveComment({
+      objectiveId: effectiveSelectedObjectiveId,
+      body: replyBody.trim(),
+    })
+    setReplyBody('')
+  }
+
+  function openAddObjectiveForm () {
+    setObjectiveFormMode('add')
+    setFormDescription('')
+  }
+
+  function openEditObjectiveForm () {
+    if (!selectedObjective) {
+      return
+    }
+    setObjectiveFormMode('edit')
+    setFormDescription(selectedObjective.description)
+  }
+
+  function closeObjectiveForm () {
+    setObjectiveFormMode('none')
+    setFormDescription('')
+  }
+
+  async function handleSaveObjectiveForm () {
+    const description = formDescription.trim()
+    if (!description) {
+      return
+    }
+    setIsSavingObjective(true)
+    try {
+      if (objectiveFormMode === 'add') {
+        const created = await upsertObjective({
+          url: pageUrl,
+          description,
+          status: 'active',
+          order: nextObjectiveOrder,
+        })
+        setSelectedObjectiveId(created._id)
+      } else if (objectiveFormMode === 'edit' && selectedObjective) {
+        await upsertObjective({
+          objectiveId: selectedObjective._id,
+          url: pageUrl,
+          description,
+          status: selectedObjective.status,
+          order: selectedObjective.order,
+        })
+      }
+      closeObjectiveForm()
+    } finally {
+      setIsSavingObjective(false)
+    }
+  }
+
+  return (
+    <section className={`objectivesPanel ${inDialog ? 'objectivesPanelInDialog' : ''}`}>
+      <div className={`objectivesHeader ${inDialog ? 'objectivesHeaderWithActions' : ''}`}>
+        <div>
+          <h2 className='objectivesTitle'>Scopo della pagina</h2>
+          <p className='objectivesLead'>
+            Objectives e indicatori condivisi per discutere cosa dovrebbe ottenere
+            <strong> {pageTitle}</strong>.
+          </p>
+        </div>
+        {inDialog && (
+          <div className='objectivesHeaderActions'>
+            <button
+              type='button'
+              className='textLinkBtn objectiveHeaderBtn'
+              onClick={openAddObjectiveForm}
+            >
+              + Aggiungi objective
+            </button>
+            <button
+              type='button'
+              className='textLinkBtn objectiveHeaderBtn'
+              disabled={!selectedObjective}
+              onClick={openEditObjectiveForm}
+            >
+              Modifica objective
+            </button>
+          </div>
+        )}
+      </div>
+
+      {inDialog && objectiveFormMode !== 'none' && (
+        <div className='objectiveFormCard'>
+          <h3 className='sectionTitle'>
+            {objectiveFormMode === 'add' ? 'Nuovo objective' : 'Modifica objective'}
+          </h3>
+          <label className='fieldLabel' htmlFor='objective-form-description'>
+            Descrizione
+          </label>
+          <textarea
+            id='objective-form-description'
+            className='dialogTextarea'
+            rows={3}
+            value={formDescription}
+            onChange={(e) => setFormDescription(e.target.value)}
+            placeholder='Cosa dovrebbe ottenere chi visita la pagina?'
+          />
+          <div className='objectiveFormActions'>
+            <button
+              type='button'
+              className='secondaryBtn'
+              disabled={isSavingObjective}
+              onClick={closeObjectiveForm}
+            >
+              Annulla
+            </button>
+            <button
+              type='button'
+              className='primaryBtn primaryBtnInline'
+              disabled={
+                isSavingObjective ||
+                !formDescription.trim()
+              }
+              onClick={handleSaveObjectiveForm}
+            >
+              {isSavingObjective ? 'Salvataggio…' : 'Salva'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {objectives === undefined && (
+        <p className='muted'>Caricamento objectives…</p>
+      )}
+
+      {objectives !== undefined && visibleObjectives.length === 0 && (
+        <div className='objectiveEmptyPage'>
+          <p className='muted'>
+            Nessun objective definito ancora per questa pagina.
+          </p>
+          {inDialog && objectiveFormMode === 'none' && (
+            <button type='button' className='primaryBtn' onClick={openAddObjectiveForm}>
+              Crea il primo objective
+            </button>
+          )}
+        </div>
+      )}
+
+      {visibleObjectives.length > 0 && (
+        <div className='objectivesLayout'>
+          <div
+            className='objectiveTabs'
+            role='tablist'
+            aria-label='Objectives della pagina'
+          >
+            {visibleObjectives.map((objective, index) => {
+              const isSelected = objective._id === effectiveSelectedObjectiveId
+              return (
+                <button
+                  key={objective._id}
+                  type='button'
+                  role='tab'
+                  aria-selected={isSelected}
+                  className={`objectiveTab ${isSelected ? 'objectiveTabSelected' : ''}`}
+                  onClick={() => setSelectedObjectiveId(objective._id)}
+                >
+                  <span className='objectiveTabIndex'>{index + 1}</span>
+                  <span className='objectiveTabText'>
+                    <span className='objectiveTabDescription objectiveTabDescriptionPrimary'>
+                      {objective.description}
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className='objectiveDetailColumn'>
+            {!selectedObjective && (
+              <p className='muted'>Seleziona un objective per leggere il thread.</p>
+            )}
+
+            {selectedObjective && (
+              <>
+                <div
+                  className='objectiveSubTabs'
+                  role='tablist'
+                  aria-label='Dettaglio objective'
+                >
+                  <button
+                    type='button'
+                    role='tab'
+                    aria-selected={detailSubTab === 'indicators'}
+                    className={`objectiveSubTab ${detailSubTab === 'indicators' ? 'objectiveSubTabSelected' : ''}`}
+                    onClick={() => setDetailSubTab('indicators')}
+                  >
+                    Indicatori
+                  </button>
+                  <button
+                    type='button'
+                    role='tab'
+                    aria-selected={detailSubTab === 'thread'}
+                    className={`objectiveSubTab ${detailSubTab === 'thread' ? 'objectiveSubTabSelected' : ''}`}
+                    onClick={() => setDetailSubTab('thread')}
+                  >
+                    Thread
+                    <span className='objectiveSubTabBadge'>
+                      {visibleObjectiveComments.length}
+                    </span>
+                  </button>
+                </div>
+
+                {detailSubTab === 'indicators' && (
+                  <section className='objectiveSectionCard'>
+                    <div className='objectiveSectionHeader'>
+                      <div>
+                        <p className='objectiveSectionLead'>
+                          Parametri descrittivi per capire se la pagina sta centrando questo objective.
+                        </p>
+                      </div>
+                    </div>
+                    <ObjectiveIndicatorsEditor
+                      objectiveId={selectedObjective._id}
+                      editable={inDialog}
+                    />
+                  </section>
+                )}
+
+                {detailSubTab === 'thread' && (
+                  <section className='objectiveSectionCard'>
+                    <div className='objectiveSectionHeader'>
+                      <div>
+                        <p className='objectiveSectionLead'>
+                          Thread condiviso per confrontarsi su chiarezza, limiti e possibili miglioramenti.
+                        </p>
+                      </div>
+                    </div>
+
+                    {objectiveComments === undefined && (
+                      <p className='muted objectiveEmptyState'>Caricamento discussione…</p>
+                    )}
+
+                    {objectiveComments !== undefined && (
+                      <>
+                        <ul className='threadList objectiveThreadList'>
+                          {visibleObjectiveComments.map((comment) => (
+                            <li key={comment._id} className='threadItem objectiveThreadItem'>
+                              <div className='threadMeta'>{comment.authorId}</div>
+                              <div>{comment.body}</div>
+                            </li>
+                          ))}
+                          {visibleObjectiveComments.length === 0 && (
+                            <li className='muted objectiveEmptyState'>
+                              Nessun messaggio ancora su questo objective.
+                            </li>
+                          )}
+                        </ul>
+
+                        <div className='objectiveComposer'>
+                          <label
+                            className='fieldLabel'
+                            htmlFor={`objective-reply-${selectedObjective._id}`}
+                          >
+                            Aggiungi un contributo al thread
+                          </label>
+                          <textarea
+                            id={`objective-reply-${selectedObjective._id}`}
+                            className='dialogTextarea'
+                            rows={3}
+                            value={replyBody}
+                            onChange={(e) => setReplyBody(e.target.value)}
+                            placeholder='Scrivi un feedback sullo scopo della pagina…'
+                          />
+                          <button
+                            type='button'
+                            className='secondaryBtn objectiveComposerBtn'
+                            onClick={handleAddObjectiveComment}
+                          >
+                            Pubblica nel thread
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </section>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 type FeedbackDialogProps = {
   open: boolean
   pageUrl: string
   pageTitle: string
-  startAt: 'form' | 'thread'
+  startAt: 'form' | 'thread' | 'objective'
   presetRating: 1 | 2 | 3 | null
   onClose: () => void
 }
@@ -77,7 +697,7 @@ function FeedbackDialog ({
   const addComment = useMutation(api.example.addComment)
   const toggleReaction = useMutation(api.example.toggleReaction)
 
-  const [step, setStep] = useState<'form' | 'thread'>('form')
+  const [step, setStep] = useState<'form' | 'thread' | 'objective'>('form')
   const [selectedRating, setSelectedRating] = useState<1 | 2 | 3>(3)
   const [optionalNote, setOptionalNote] = useState('')
   const [replyBody, setReplyBody] = useState('')
@@ -109,6 +729,8 @@ function FeedbackDialog ({
     setReplyBody('')
     if (startAt === 'thread') {
       setStep('thread')
+    } else if (startAt === 'objective') {
+      setStep('objective')
     } else {
       setStep('form')
       if (presetRating !== null) {
@@ -152,6 +774,8 @@ function FeedbackDialog ({
 
   const showThread =
     hasFeedback && step === 'thread'
+
+  const showObjective = step === 'objective'
 
   const savedMoodOnServer =
     myFeedback ? myFeedback.rating : null
@@ -221,7 +845,7 @@ function FeedbackDialog ({
       }}
     >
       <div
-        className='dialogPanel'
+        className={`dialogPanel ${showObjective ? 'dialogPanelWide' : ''}`}
         role='dialog'
         aria-modal='true'
         aria-labelledby='feedback-dialog-title'
@@ -296,6 +920,16 @@ function FeedbackDialog ({
 
         {startAt === 'thread' && feedbackLoading && (
           <p className='dialogEmpty muted'>Caricamento…</p>
+        )}
+
+        {showObjective && (
+          <div className='dialogSection'>
+            <PageObjectivesContent
+              pageUrl={pageUrl}
+              pageTitle={pageTitle}
+              inDialog
+            />
+          </div>
         )}
 
         {showThread && (
@@ -416,17 +1050,16 @@ function FeedbackDialog ({
 
 function FeedbackDock ({
   pageUrl,
-  pageTitle,
   onOpenDialog,
 }: {
   pageUrl: string
-  pageTitle: string
   onOpenDialog: (opts: {
-    startAt: 'form' | 'thread'
+    startAt: 'form' | 'thread' | 'objective'
     presetRating: 1 | 2 | 3 | null
   }) => void
 }) {
   const myFeedback = useQuery(api.example.getMyFeedback, { url: pageUrl })
+  const objectives = useQuery(api.example.listObjectivesForUrl, { url: pageUrl })
   const comments = useQuery(
     api.example.listComments,
     myFeedback
@@ -436,6 +1069,8 @@ function FeedbackDock ({
 
   const commentCount =
     comments?.filter((row) => !row.comment.isDeleted).length ?? 0
+  const objectiveCount =
+    objectives?.filter((objective) => objective.status === 'active').length ?? 0
 
   const savedMood =
     myFeedback !== undefined && myFeedback !== null
@@ -462,15 +1097,26 @@ function FeedbackDock ({
             </button>
           ))}
         </div>
-        <button
-          type='button'
-          className='commentBadge'
-          title='Apri thread e commenti'
-          onClick={() => onOpenDialog({ startAt: 'thread', presetRating: null })}
-        >
-          💬
-          <span className='badgeCount'>{myFeedback ? commentCount : '—'}</span>
-        </button>
+        <div className='dockActions'>
+          <button
+            type='button'
+            className='commentBadge'
+            title='Apri scopo della pagina'
+            onClick={() => onOpenDialog({ startAt: 'objective', presetRating: null })}
+          >
+            🎯
+            <span className='badgeCount'>{objectiveCount || '—'}</span>
+          </button>
+          <button
+            type='button'
+            className='commentBadge'
+            title='Apri thread e commenti'
+            onClick={() => onOpenDialog({ startAt: 'thread', presetRating: null })}
+          >
+            💬
+            <span className='badgeCount'>{myFeedback ? commentCount : '—'}</span>
+          </button>
+        </div>
       </div>
     </footer>
   )
@@ -482,7 +1128,7 @@ function ContentPage ({
 }: {
   page: (typeof DEMO_PAGES)[number]
   onOpenFeedback: (opts: {
-    startAt: 'form' | 'thread'
+    startAt: 'form' | 'thread' | 'objective'
     presetRating: 1 | 2 | 3 | null
   }) => void
 }) {
@@ -499,7 +1145,6 @@ function ContentPage ({
       </div>
       <FeedbackDock
         pageUrl={page.url}
-        pageTitle={page.title}
         onOpenDialog={onOpenFeedback}
       />
     </article>
@@ -603,7 +1248,7 @@ function App () {
     open: boolean
     pageUrl: string
     pageTitle: string
-    startAt: 'form' | 'thread'
+    startAt: 'form' | 'thread' | 'objective'
     presetRating: 1 | 2 | 3 | null
   }>({
     open: false,
@@ -619,7 +1264,7 @@ function App () {
     (
       pageUrl: string,
       pageTitle: string,
-      opts: { startAt: 'form' | 'thread'; presetRating: 1 | 2 | 3 | null },
+      opts: { startAt: 'form' | 'thread' | 'objective'; presetRating: 1 | 2 | 3 | null },
     ) => {
       setDialog({
         open: true,

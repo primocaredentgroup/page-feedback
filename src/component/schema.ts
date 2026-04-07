@@ -7,6 +7,11 @@ const ratingValidator = v.union(
   v.literal(3),
 );
 
+const objectiveStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("archived"),
+);
+
 export default defineSchema({
   feedbackThreads: defineTable({
     userId: v.string(),
@@ -57,4 +62,33 @@ export default defineSchema({
     improvementRequestUrl: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  pageObjectives: defineTable({
+    normalizedUrl: v.string(),
+    description: v.string(),
+    status: objectiveStatusValidator,
+    order: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_normalizedUrl_and_order", ["normalizedUrl", "order"]),
+
+  objectiveIndicators: defineTable({
+    objectiveId: v.id("pageObjectives"),
+    description: v.string(),
+    order: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_objectiveId_and_order", ["objectiveId", "order"]),
+
+  objectiveComments: defineTable({
+    objectiveId: v.id("pageObjectives"),
+    authorId: v.string(),
+    body: v.string(),
+    isEdited: v.boolean(),
+    isDeleted: v.boolean(),
+    createdAt: v.number(),
+    editedAt: v.optional(v.number()),
+  })
+    .index("by_objectiveId_and_createdAt", ["objectiveId", "createdAt"])
+    .index("by_authorId", ["authorId"]),
 });

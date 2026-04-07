@@ -49,6 +49,23 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      addObjectiveComment: FunctionReference<
+        "mutation",
+        "internal",
+        { body: string; objectiveId: string; userId: string },
+        {
+          _creationTime: number;
+          _id: string;
+          authorId: string;
+          body: string;
+          createdAt: number;
+          editedAt?: number;
+          isDeleted: boolean;
+          isEdited: boolean;
+          objectiveId: string;
+        },
+        Name
+      >;
       deleteComment: FunctionReference<
         "mutation",
         "internal",
@@ -160,6 +177,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      listIndicatorsForObjective: FunctionReference<
+        "query",
+        "internal",
+        { objectiveId: string },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description: string;
+          objectiveId: string;
+          order: number;
+          updatedAt: number;
+        }>,
+        Name
+      >;
       listLatestFeedbackForUrl: FunctionReference<
         "query",
         "internal",
@@ -187,6 +219,39 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           updatedAt: number;
           userId: string;
           version: number;
+        }>,
+        Name
+      >;
+      listObjectiveComments: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number; objectiveId: string },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          authorId: string;
+          body: string;
+          createdAt: number;
+          editedAt?: number;
+          isDeleted: boolean;
+          isEdited: boolean;
+          objectiveId: string;
+        }>,
+        Name
+      >;
+      listObjectivesForUrl: FunctionReference<
+        "query",
+        "internal",
+        { url: string },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description: string;
+          normalizedUrl: string;
+          order: number;
+          status: "active" | "archived";
+          updatedAt: number;
         }>,
         Name
       >;
@@ -228,6 +293,48 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           updatedAt: number;
           userId: string;
           version: number;
+        },
+        Name
+      >;
+      upsertIndicator: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          description: string;
+          indicatorId?: string;
+          objectiveId: string;
+          order: number;
+        },
+        {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description: string;
+          objectiveId: string;
+          order: number;
+          updatedAt: number;
+        },
+        Name
+      >;
+      upsertObjective: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          description: string;
+          objectiveId?: string;
+          order: number;
+          status: "active" | "archived";
+          url: string;
+        },
+        {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description: string;
+          normalizedUrl: string;
+          order: number;
+          status: "active" | "archived";
+          updatedAt: number;
         },
         Name
       >;

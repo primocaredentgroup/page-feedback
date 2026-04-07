@@ -14,6 +14,10 @@ const ratingValidator = v.union(
 );
 
 const nullableStringValidator = v.union(v.string(), v.null());
+const objectiveStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("archived"),
+);
 
 const feedbackVersionValidator = schema.tables.feedbackVersions.validator.extend({
   _id: v.id("feedbackVersions"),
@@ -22,6 +26,23 @@ const feedbackVersionValidator = schema.tables.feedbackVersions.validator.extend
 
 const feedbackCommentValidator = schema.tables.feedbackComments.validator.extend({
   _id: v.id("feedbackComments"),
+  _creationTime: v.number(),
+});
+
+const pageObjectiveValidator = schema.tables.pageObjectives.validator.extend({
+  _id: v.id("pageObjectives"),
+  _creationTime: v.number(),
+});
+
+const objectiveIndicatorValidator = schema.tables.objectiveIndicators.validator.extend(
+  {
+    _id: v.id("objectiveIndicators"),
+    _creationTime: v.number(),
+  },
+);
+
+const objectiveCommentValidator = schema.tables.objectiveComments.validator.extend({
+  _id: v.id("objectiveComments"),
   _creationTime: v.number(),
 });
 
@@ -52,6 +73,21 @@ const settingsOutputValidator = v.object({
   improvementRequestUrl: nullableStringValidator,
   updatedAt: v.union(v.number(), v.null()),
 });
+
+const upsertObjectiveArgsValidator = {
+  objectiveId: v.optional(v.id("pageObjectives")),
+  url: v.string(),
+  description: v.string(),
+  status: objectiveStatusValidator,
+  order: v.number(),
+} as const;
+
+const upsertIndicatorArgsValidator = {
+  indicatorId: v.optional(v.id("objectiveIndicators")),
+  objectiveId: v.id("pageObjectives"),
+  description: v.string(),
+  order: v.number(),
+} as const;
 
 export const upsertFeedback = mutation({
   args: {
@@ -417,6 +453,172 @@ export const toggleReaction = mutation({
   },
 });
 
+export const listObjectivesForUrl = query({
+  args: {
+    url: v.string(),
+  },
+  returns: v.array(pageObjectiveValidator),
+  handler: async (ctx, args) => {
+    const normalizedUrl = normalizeUrl(args.url);
+
+    return await ctx.db
+      .query("pageObjectives")
+      .withIndex("by_normalizedUrl_and_order", (q) =>
+        q.eq("normalizedUrl", normalizedUrl),
+      )
+      .order("asc")
+      .take(100);
+  },
+});
+
+export const upsertObjective = mutation({
+  args: upsertObjectiveArgsValidator,
+  returns: pageObjectiveValidator,
+  handler: async (ctx, args) => {
+    const normalizedUrl = normalizeUrl(args.url);
+    const description = normalizeRequiredText(
+      args.description,
+      "objective description is required",
+    );
+    const order = normalizeOrder(args.order);
+    const now = Date.now();
+
+    if (!args.objectiveId) {
+      const objectiveId = await ctx.db.insert("pageObjectives", {
+        normalizedUrl,
+        description,
+        status: args.status,
+        order,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return await requirePageObjective(ctx, objectiveId);
+    }
+
+    const existingObjective = await requirePageObjective(ctx, args.objectiveId);
+    await ctx.db.patch("pageObjectives", args.objectiveId, {
+      normalizedUrl,
+      description,
+      status: args.status,
+      order,
+      updatedAt: now,
+    });
+
+    return {
+      ...existingObjective,
+      normalizedUrl,
+      description,
+      status: args.status,
+      order,
+      updatedAt: now,
+    };
+  },
+});
+
+export const listIndicatorsForObjective = query({
+  args: {
+    objectiveId: v.id("pageObjectives"),
+  },
+  returns: v.array(objectiveIndicatorValidator),
+  handler: async (ctx, args) => {
+    await requirePageObjective(ctx, args.objectiveId);
+
+    return await ctx.db
+      .query("objectiveIndicators")
+      .withIndex("by_objectiveId_and_order", (q) =>
+        q.eq("objectiveId", args.objectiveId),
+      )
+      .order("asc")
+      .take(100);
+  },
+});
+
+export const upsertIndicator = mutation({
+  args: upsertIndicatorArgsValidator,
+  returns: objectiveIndicatorValidator,
+  handler: async (ctx, args) => {
+    await requirePageObjective(ctx, args.objectiveId);
+    const description = normalizeRequiredText(
+      args.description,
+      "indicator description is required",
+    );
+    const order = normalizeOrder(args.order);
+    const now = Date.now();
+
+    if (!args.indicatorId) {
+      const indicatorId = await ctx.db.insert("objectiveIndicators", {
+        objectiveId: args.objectiveId,
+        description,
+        order,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return await requireObjectiveIndicator(ctx, indicatorId);
+    }
+
+    const existingIndicator = await requireObjectiveIndicator(ctx, args.indicatorId);
+    await ctx.db.patch("objectiveIndicators", args.indicatorId, {
+      objectiveId: args.objectiveId,
+      description,
+      order,
+      updatedAt: now,
+    });
+
+    return {
+      ...existingIndicator,
+      objectiveId: args.objectiveId,
+      description,
+      order,
+      updatedAt: now,
+    };
+  },
+});
+
+export const listObjectiveComments = query({
+  args: {
+    objectiveId: v.id("pageObjectives"),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(objectiveCommentValidator),
+  handler: async (ctx, args) => {
+    await requirePageObjective(ctx, args.objectiveId);
+
+    return await ctx.db
+      .query("objectiveComments")
+      .withIndex("by_objectiveId_and_createdAt", (q) =>
+        q.eq("objectiveId", args.objectiveId),
+      )
+      .order("asc")
+      .take(getSafeLimit(args.limit));
+  },
+});
+
+export const addObjectiveComment = mutation({
+  args: {
+    userId: v.string(),
+    objectiveId: v.id("pageObjectives"),
+    body: v.string(),
+  },
+  returns: objectiveCommentValidator,
+  handler: async (ctx, args) => {
+    const authorId = normalizeUserId(args.userId);
+    const body = normalizeCommentBody(args.body);
+    await requirePageObjective(ctx, args.objectiveId);
+    const commentId = await ctx.db.insert("objectiveComments", {
+      objectiveId: args.objectiveId,
+      authorId,
+      body,
+      isEdited: false,
+      isDeleted: false,
+      createdAt: Date.now(),
+    });
+
+    return await requireObjectiveComment(ctx, commentId);
+  },
+});
+
 export const getSettings = query({
   args: {},
   returns: settingsOutputValidator,
@@ -492,13 +694,7 @@ function normalizeUserId(userId: string) {
 }
 
 function normalizeCommentBody(body: string) {
-  const normalizedBody = body.trim();
-
-  if (normalizedBody.length === 0) {
-    throw new Error("comment body is required");
-  }
-
-  return normalizedBody;
+  return normalizeRequiredText(body, "comment body is required");
 }
 
 function normalizeEmoji(emoji: string) {
@@ -509,6 +705,24 @@ function normalizeEmoji(emoji: string) {
   }
 
   return normalizedEmoji;
+}
+
+function normalizeRequiredText(value: string, errorMessage: string) {
+  const normalizedValue = value.trim();
+
+  if (normalizedValue.length === 0) {
+    throw new Error(errorMessage);
+  }
+
+  return normalizedValue;
+}
+
+function normalizeOrder(order: number) {
+  if (!Number.isInteger(order) || order < 0) {
+    throw new Error("order must be a non-negative integer");
+  }
+
+  return order;
 }
 
 function normalizeUrl(url: string) {
@@ -550,6 +764,45 @@ async function requireComment(
 
   if (!comment) {
     throw new Error("comment not found");
+  }
+
+  return comment;
+}
+
+async function requirePageObjective(
+  ctx: QueryCtx | MutationCtx,
+  objectiveId: Doc<"pageObjectives">["_id"],
+) {
+  const objective = await ctx.db.get(objectiveId);
+
+  if (!objective) {
+    throw new Error("objective not found");
+  }
+
+  return objective;
+}
+
+async function requireObjectiveIndicator(
+  ctx: QueryCtx | MutationCtx,
+  indicatorId: Doc<"objectiveIndicators">["_id"],
+) {
+  const indicator = await ctx.db.get(indicatorId);
+
+  if (!indicator) {
+    throw new Error("indicator not found");
+  }
+
+  return indicator;
+}
+
+async function requireObjectiveComment(
+  ctx: QueryCtx | MutationCtx,
+  commentId: Doc<"objectiveComments">["_id"],
+) {
+  const comment = await ctx.db.get(commentId);
+
+  if (!comment) {
+    throw new Error("objective comment not found");
   }
 
   return comment;

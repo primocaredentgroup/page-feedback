@@ -168,4 +168,69 @@ describe('feedback-page component', () => {
     expect(commentsAfterDelete[0].comment.body).toBe('[deleted]')
     expect(commentsAfterDelete[0].reactions).toEqual([])
   })
+
+  test('stores shared objectives, indicators and objective comments per normalized url', async () => {
+    const t = initConvexTest()
+    const objective = await t.mutation(api.lib.upsertObjective, {
+      url: 'https://app.example.com/dashboard?tab=overview',
+      description: 'La pagina deve aiutare a capire subito cosa fare adesso.',
+      status: 'active',
+      order: 0,
+    })
+
+    await t.mutation(api.lib.upsertObjective, {
+      objectiveId: objective._id,
+      url: 'https://app.example.com/dashboard?tab=settings',
+      description: 'La pagina deve rendere visibile il passo successivo.',
+      status: 'active',
+      order: 1,
+    })
+
+    const indicator = await t.mutation(api.lib.upsertIndicator, {
+      objectiveId: objective._id,
+      description: 'Il bottone principale si vede senza scroll.',
+      order: 0,
+    })
+
+    await t.mutation(api.lib.upsertIndicator, {
+      indicatorId: indicator._id,
+      objectiveId: objective._id,
+      description: 'Il bottone principale si vede subito e si capisce cosa fa.',
+      order: 1,
+    })
+
+    await t.mutation(api.lib.addObjectiveComment, {
+      userId: 'user_2',
+      objectiveId: objective._id,
+      body: 'Questo objective e` molto utile per discutere la pagina.',
+    })
+
+    const objectives = await t.query(api.lib.listObjectivesForUrl, {
+      url: 'https://app.example.com/dashboard?tab=activity',
+    })
+    const indicators = await t.query(api.lib.listIndicatorsForObjective, {
+      objectiveId: objective._id,
+    })
+    const comments = await t.query(api.lib.listObjectiveComments, {
+      objectiveId: objective._id,
+      limit: 10,
+    })
+
+    expect(objectives).toHaveLength(1)
+    expect(objectives[0].normalizedUrl).toBe('https://app.example.com/dashboard')
+    expect(objectives[0].order).toBe(1)
+    expect(objectives[0].description).toBe(
+      'La pagina deve rendere visibile il passo successivo.',
+    )
+    expect(indicators).toHaveLength(1)
+    expect(indicators[0].description).toBe(
+      'Il bottone principale si vede subito e si capisce cosa fa.',
+    )
+    expect(indicators[0].order).toBe(1)
+    expect(comments).toHaveLength(1)
+    expect(comments[0].body).toBe(
+      'Questo objective e` molto utile per discutere la pagina.',
+    )
+    expect(comments[0].authorId).toBe('user_2')
+  })
 })

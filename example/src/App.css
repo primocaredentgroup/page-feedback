@@ -95,6 +95,401 @@
   margin: 0 0 1rem;
 }
 
+.objectivesPanel {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #374151;
+  border-radius: 16px;
+  background: #1f2937;
+}
+
+.objectivesPanelInDialog {
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.objectivesHeader {
+  margin-bottom: 1rem;
+}
+
+.objectivesHeaderWithActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.objectivesHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  flex-shrink: 0;
+}
+
+.objectiveHeaderBtn {
+  font-size: 0.82rem;
+}
+
+.objectiveFormCard {
+  margin-bottom: 1rem;
+  padding: 0.95rem;
+  border: 1px solid #374151;
+  border-radius: 14px;
+  background: rgba(17, 24, 39, 0.72);
+}
+
+.objectiveFormActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.objectiveEmptyPage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.dialogInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #4b5563;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: #111827;
+  color: #f9fafb;
+}
+
+.dialogInput:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+  border-color: #3b82f6;
+}
+
+.primaryBtnInline {
+  margin-top: 0;
+}
+
+.objectiveSubTabs {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.2rem;
+  border-radius: 12px;
+  background: #111827;
+  border: 1px solid #374151;
+}
+
+.objectiveSubTab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.objectiveSubTab:hover {
+  color: #f3f4f6;
+  background: rgba(55, 65, 81, 0.5);
+}
+
+.objectiveSubTabSelected {
+  color: #ffffff;
+  background: rgba(37, 99, 235, 0.35);
+  border-color: #3b82f6;
+}
+
+.objectiveSubTabBadge {
+  min-width: 1.15rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #fbbf24;
+}
+
+.objectivesTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #ffffff;
+}
+
+.objectivesLead {
+  margin: 0.35rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.objectivesLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.objectiveDetailColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.objectiveTabs {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  scrollbar-width: thin;
+}
+
+.objectiveTab {
+  min-width: 13rem;
+  flex: 1 0 13rem;
+  text-align: left;
+  border: 1px solid #475569;
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  background: #111827;
+  color: #f3f4f6;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.objectiveTab:hover {
+  border-color: #64748b;
+  background: #162133;
+}
+
+.objectiveTabSelected {
+  border-color: #60a5fa;
+  background: rgba(37, 99, 235, 0.14);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35);
+}
+
+.objectiveTabIndex {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 9999px;
+  background: #243244;
+  border: 1px solid #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.objectiveTabSelected .objectiveTabIndex {
+  background: #2563eb;
+  border-color: #60a5fa;
+}
+
+.objectiveTabText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.objectiveTabDescription {
+  color: #b8c3d4;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.objectiveTabDescriptionPrimary {
+  color: #f3f4f6;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.4;
+  -webkit-line-clamp: 3;
+}
+
+.objectiveSectionCard {
+  border: 1px solid #374151;
+  border-radius: 14px;
+  background: rgba(17, 24, 39, 0.72);
+  padding: 0.95rem;
+}
+
+.objectiveSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.objectiveCardDescription {
+  margin: 0.5rem 0 0.65rem;
+  color: #dbe4f0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.objectiveDescriptionCompact {
+  margin-bottom: 0;
+}
+
+.objectiveSectionLead {
+  margin: 0.35rem 0 0;
+  color: #b8c3d4;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.objectiveIndicatorList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.indicatorEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.indicatorEditorToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.indicatorFormCard {
+  padding: 0.85rem;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: #111827;
+}
+
+.indicatorFormTitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.objectiveIndicatorRowHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.objectiveIndicatorCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.8rem;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  background: #111827;
+}
+
+.objectiveIndicatorIndex {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #1d4ed8;
+}
+
+.objectiveIndicatorBody {
+  min-width: 0;
+}
+
+.objectiveIndicatorLabel {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #93c5fd;
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+
+.objectiveIndicatorText {
+  color: #dbe4f0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.objectiveEmptyState {
+  margin: 0;
+  padding: 0.75rem 0;
+}
+
+.objectiveThreadCount {
+  flex-shrink: 0;
+  padding: 0.28rem 0.55rem;
+  border-radius: 9999px;
+  border: 1px solid #475569;
+  background: #111827;
+  color: #cbd5e1;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.objectiveThreadList {
+  margin-bottom: 0;
+}
+
+.objectiveThreadItem {
+  padding: 0.8rem 0;
+}
+
+.objectiveComposer {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #374151;
+}
+
+.objectiveComposerBtn {
+  width: 100%;
+}
+
+@media (min-width: 720px) {
+  .objectivesLayout {
+    gap: 1.1rem;
+  }
+
+  .dialogPanelWide {
+    max-width: 760px;
+  }
+}
+
 .feedbackDock {
   position: fixed;
   left: 0;
@@ -195,12 +590,18 @@
   font-size: 1rem;
   cursor: pointer;
   flex-shrink: 0;
-  margin-left: auto;
 }
 
 .commentBadge:hover {
   background: #273549;
   border-color: #64748b;
+}
+
+.dockActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .badgeCount {
@@ -555,6 +956,12 @@
 
 .textLinkBtn:hover {
   color: #93c5fd;
+}
+
+.textLinkBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .cardMeta {
