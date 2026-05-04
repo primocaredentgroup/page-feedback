@@ -16,6 +16,7 @@ type UserOperation =
   | { type: "readObjectives"; normalizedUrl: string }
   | { type: "readMyFeedbackThreads" }
   | { type: "writeFeedback"; normalizedUrl: string }
+  | { type: "setFeedbackSolved"; threadId: string }
   | { type: "readFeedbackVersions"; normalizedUrl: string }
   | { type: "readComments"; threadId: string }
   | { type: "readObjectiveComments"; objectiveId: string }
@@ -68,6 +69,25 @@ export function exposeApi(
           url: normalizedUrl,
           rating: args.rating,
           note: args.note,
+        });
+      },
+    }),
+
+    setFeedbackSolved: mutationGeneric({
+      args: {
+        threadId: v.string(),
+        isSolved: v.boolean(),
+      },
+      handler: async (ctx, args) => {
+        const userId = await options.auth(ctx, {
+          type: "setFeedbackSolved",
+          threadId: args.threadId,
+        });
+
+        return await ctx.runMutation(component.lib.setFeedbackSolved, {
+          userId,
+          threadId: args.threadId,
+          isSolved: args.isSolved,
         });
       },
     }),

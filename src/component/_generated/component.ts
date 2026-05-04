@@ -115,6 +115,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         { url: string; userId: string },
         null | {
+          isSolved: boolean;
           normalizedUrl: string;
           note: string;
           rating: 1 | 2 | 3;
@@ -197,6 +198,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         { limit?: number; url: string },
         Array<{
+          isSolved: boolean;
           normalizedUrl: string;
           note: string;
           rating: 1 | 2 | 3;
@@ -212,6 +214,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         { limit?: number; userId: string },
         Array<{
+          isSolved: boolean;
           normalizedUrl: string;
           note: string;
           rating: 1 | 2 | 3;
@@ -255,6 +258,22 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      setFeedbackSolved: FunctionReference<
+        "mutation",
+        "internal",
+        { isSolved: boolean; threadId: string; userId: string },
+        {
+          isSolved: boolean;
+          normalizedUrl: string;
+          note: string;
+          rating: 1 | 2 | 3;
+          threadId: string;
+          updatedAt: number;
+          userId: string;
+          version: number;
+        },
+        Name
+      >;
       setSettings: FunctionReference<
         "mutation",
         "internal",
@@ -286,6 +305,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         { note: string; rating: 1 | 2 | 3; url: string; userId: string },
         {
+          isSolved: boolean;
           normalizedUrl: string;
           note: string;
           rating: 1 | 2 | 3;

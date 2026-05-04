@@ -6,6 +6,7 @@ import { components, initConvexTest } from './setup.test.js'
 export const {
   getMyFeedback,
   upsertFeedback,
+  setFeedbackSolved,
   listFeedbackVersions,
   listObjectivesForUrl,
   upsertObjective,
@@ -29,6 +30,7 @@ const testApi = (
     'index.test': {
       getMyFeedback: typeof getMyFeedback;
       upsertFeedback: typeof upsertFeedback;
+      setFeedbackSolved: typeof setFeedbackSolved;
       listFeedbackVersions: typeof listFeedbackVersions;
       listObjectivesForUrl: typeof listObjectivesForUrl;
       upsertObjective: typeof upsertObjective;
@@ -72,8 +74,33 @@ describe('client tests', () => {
 
     expect(myFeedback?.version).toBe(2)
     expect(myFeedback?.normalizedUrl).toBe('https://app.example.com/settings')
+    expect(myFeedback?.isSolved).toBe(false)
     expect(versions).toHaveLength(2)
     expect(versions[0].note).toBe('Second version')
+  })
+
+  test('should be able to mark a wrapped feedback thread as solved', async () => {
+    const t = initConvexTest().withIdentity({
+      tokenIdentifier: 'user1',
+      subject: 'user1',
+    })
+    const url = 'https://app.example.com/settings?tab=profile'
+
+    const createdFeedback = await t.mutation(testApi.upsertFeedback, {
+      url,
+      rating: 2,
+      note: 'First version',
+    })
+
+    const solvedFeedback = await t.mutation(testApi.setFeedbackSolved, {
+      threadId: createdFeedback.threadId,
+      isSolved: true,
+    })
+
+    const myFeedback = await t.query(testApi.getMyFeedback, { url })
+
+    expect(solvedFeedback.isSolved).toBe(true)
+    expect(myFeedback?.isSolved).toBe(true)
   })
 
   test('should be able to use wrapped comment apis', async () => {

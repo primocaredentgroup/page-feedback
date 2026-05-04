@@ -40,10 +40,54 @@ describe('feedback-page component', () => {
     })
 
     expect(firstFeedback.version).toBe(1)
+    expect(firstFeedback.isSolved).toBe(false)
     expect(secondFeedback.version).toBe(2)
+    expect(secondFeedback.isSolved).toBe(false)
     expect(myFeedback?.normalizedUrl).toBe('https://app.example.com/dashboard')
     expect(myFeedback?.rating).toBe(3)
+    expect(myFeedback?.isSolved).toBe(false)
     expect(versions.map((version) => version.version)).toEqual([2, 1])
+  })
+
+  test('updates solved state without creating a new feedback version', async () => {
+    const t = initConvexTest()
+
+    const createdFeedback = await t.mutation(api.lib.upsertFeedback, {
+      userId: 'user_1',
+      url: 'https://app.example.com/dashboard?tab=overview',
+      rating: 2,
+      note: 'Needs work',
+    })
+
+    const solvedFeedback = await t.mutation(api.lib.setFeedbackSolved, {
+      userId: 'user_2',
+      threadId: createdFeedback.threadId,
+      isSolved: true,
+    })
+
+    const feedbackAfterSolved = await t.query(api.lib.getMyFeedback, {
+      userId: 'user_1',
+      url: 'https://app.example.com/dashboard?tab=overview',
+    })
+
+    const updatedFeedback = await t.mutation(api.lib.upsertFeedback, {
+      userId: 'user_1',
+      url: 'https://app.example.com/dashboard?tab=notifications',
+      rating: 3,
+      note: 'Much better now',
+    })
+
+    const feedbackAfterUpdate = await t.query(api.lib.getMyFeedback, {
+      userId: 'user_1',
+      url: 'https://app.example.com/dashboard?tab=settings',
+    })
+
+    expect(solvedFeedback.isSolved).toBe(true)
+    expect(solvedFeedback.version).toBe(1)
+    expect(feedbackAfterSolved?.isSolved).toBe(true)
+    expect(updatedFeedback.version).toBe(2)
+    expect(updatedFeedback.isSolved).toBe(true)
+    expect(feedbackAfterUpdate?.isSolved).toBe(true)
   })
 
   test('lists all feedback threads for a user ordered by updatedAt desc', async () => {

@@ -63,6 +63,7 @@ const latestFeedbackValidator = v.object({
   version: v.number(),
   rating: ratingValidator,
   note: v.string(),
+  isSolved: v.boolean(),
   userId: v.string(),
   normalizedUrl: v.string(),
   updatedAt: v.number(),
@@ -111,6 +112,7 @@ export const upsertFeedback = mutation({
         latestVersion: 1,
         latestRating: args.rating,
         latestNote: note,
+        isSolved: false,
         updatedAt: now,
       });
 
@@ -128,6 +130,7 @@ export const upsertFeedback = mutation({
         version: 1,
         rating: args.rating,
         note,
+        isSolved: false,
         userId,
         normalizedUrl,
         updatedAt: now,
@@ -157,9 +160,36 @@ export const upsertFeedback = mutation({
       version: nextVersion,
       rating: args.rating,
       note,
+      isSolved: existingThread.isSolved ?? false,
       userId,
       normalizedUrl,
       updatedAt: now,
+    };
+  },
+});
+
+export const setFeedbackSolved = mutation({
+  args: {
+    userId: v.string(),
+    threadId: v.id("feedbackThreads"),
+    isSolved: v.boolean(),
+  },
+  returns: latestFeedbackValidator,
+  handler: async (ctx, args) => {
+    normalizeUserId(args.userId);
+    const thread = await ctx.db.get(args.threadId);
+
+    if (!thread) {
+      throw new Error("feedback thread not found");
+    }
+
+    await ctx.db.patch("feedbackThreads", args.threadId, {
+      isSolved: args.isSolved,
+    });
+
+    return {
+      ...mapThreadToLatestFeedback(thread),
+      isSolved: args.isSolved,
     };
   },
 });
@@ -870,6 +900,7 @@ function mapThreadToLatestFeedback(thread: Doc<"feedbackThreads">) {
     version: thread.latestVersion,
     rating: thread.latestRating,
     note: thread.latestNote,
+    isSolved: thread.isSolved ?? false,
     userId: thread.userId,
     normalizedUrl: thread.normalizedUrl,
     updatedAt: thread.updatedAt,

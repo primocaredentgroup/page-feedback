@@ -116,6 +116,7 @@ export const setPageFeedbackSettings = mutation({
 export const {
   getMyFeedback,
   upsertFeedback,
+  setFeedbackSolved,
   listFeedbackVersions,
   listLatestFeedbackForUrl,
   listObjectivesForUrl,

@@ -57,6 +57,7 @@ import { exposeApi } from '@okrlinkhub/page-feedback'
 export const {
   getMyFeedback,
   upsertFeedback,
+  setFeedbackSolved,
   listFeedbackVersions,
   listLatestFeedbackForUrl,
   listObjectivesForUrl,
@@ -99,7 +100,7 @@ See more example usage in [example.ts](./example/convex/example.ts).
 
 The component stores data in eight tables:
 
-- `feedbackThreads`: latest feedback snapshot for each `userId + normalizedUrl`
+- `feedbackThreads`: latest feedback snapshot for each `userId + normalizedUrl`, including `isSolved`
 - `feedbackVersions`: append-only history for each feedback thread
 - `feedbackComments`: linear discussion messages attached to a feedback thread
 - `feedbackReactions`: emoji reactions attached to a feedback comment
@@ -116,6 +117,7 @@ everything before `?`.
 The installed component exposes these public functions:
 
 - `lib.upsertFeedback({ userId, url, rating, note })`
+- `lib.setFeedbackSolved({ userId, threadId, isSolved })`
 - `lib.getMyFeedback({ userId, url })`
 - `lib.listFeedbackVersions({ userId, url, limit? })`
 - `lib.listLatestFeedbackForUrl({ url, limit? })`
@@ -135,6 +137,12 @@ The installed component exposes these public functions:
 - `lib.setSettings({ bugReportUrl?, improvementRequestUrl? })`
 
 `rating` is constrained to integers from `1` to `3`.
+
+`isSolved` is a thread-level state, not a versioned feedback field. Updating the
+rating or note still creates a new row in `feedbackVersions`, while changing
+`isSolved` only updates the latest thread snapshot. For compatibility with
+existing installations, older threads without `isSolved` are treated as
+unsolved until they are updated.
 
 This release intentionally does **not** include mentions or realtime typing.
 Those can be layered in later without coupling the component to a specific user

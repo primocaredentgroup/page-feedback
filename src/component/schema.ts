@@ -19,6 +19,7 @@ export default defineSchema({
     latestVersion: v.number(),
     latestRating: ratingValidator,
     latestNote: v.string(),
+    isSolved: v.optional(v.boolean()),
     updatedAt: v.number(),
   })
     .index("by_userId_and_normalizedUrl", ["userId", "normalizedUrl"])

@@ -787,6 +787,37 @@
   font-weight: 700;
 }
 
+.feedbackStatusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.feedbackStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.65rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.feedbackStatusBadgeSolved {
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.feedbackStatusBadgeOpen {
+  color: #fde68a;
+  background: rgba(251, 191, 36, 0.16);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
 .initialNote {
   margin: 0 0 1rem;
   font-size: 0.95rem;
@@ -902,6 +933,14 @@
   align-items: flex-start;
   gap: 0.75rem;
   margin-bottom: 0.5rem;
+}
+
+.cardRowAside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .cardTitle {

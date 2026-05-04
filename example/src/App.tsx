@@ -696,6 +696,7 @@ function FeedbackDialog ({
   const upsertFeedback = useMutation(api.example.upsertFeedback)
   const addComment = useMutation(api.example.addComment)
   const toggleReaction = useMutation(api.example.toggleReaction)
+  const setFeedbackSolved = useMutation(api.example.setFeedbackSolved)
 
   const [step, setStep] = useState<'form' | 'thread' | 'objective'>('form')
   const [selectedRating, setSelectedRating] = useState<1 | 2 | 3>(3)
@@ -705,6 +706,7 @@ function FeedbackDialog ({
   const [editRating, setEditRating] = useState<1 | 2 | 3>(3)
   const [editNote, setEditNote] = useState('')
   const [isUpdatingRating, setIsUpdatingRating] = useState(false)
+  const [isUpdatingSolved, setIsUpdatingSolved] = useState(false)
 
   const resetFormState = useCallback(() => {
     setStep('form')
@@ -830,6 +832,22 @@ function FeedbackDialog ({
     }
   }
 
+  async function handleToggleSolved () {
+    if (!myFeedback) {
+      return
+    }
+
+    setIsUpdatingSolved(true)
+    try {
+      await setFeedbackSolved({
+        threadId: myFeedback.threadId,
+        isSolved: !myFeedback.isSolved,
+      })
+    } finally {
+      setIsUpdatingSolved(false)
+    }
+  }
+
   if (!open) {
     return null
   }
@@ -939,6 +957,25 @@ function FeedbackDialog ({
               Quella salvata è evidenziata; puoi cambiare faccia o testo e
               salvare di nuovo (crea una nuova versione).
             </p>
+            <div className='feedbackStatusRow'>
+              <span
+                className={`feedbackStatusBadge ${myFeedback.isSolved ? 'feedbackStatusBadgeSolved' : 'feedbackStatusBadgeOpen'}`}
+              >
+                {myFeedback.isSolved ? 'Risolto' : 'Aperto'}
+              </span>
+              <button
+                type='button'
+                className='secondaryBtn'
+                disabled={isUpdatingSolved}
+                onClick={handleToggleSolved}
+              >
+                {isUpdatingSolved
+                  ? 'Salvataggio…'
+                  : myFeedback.isSolved
+                    ? 'Segna come non risolto'
+                    : 'Segna come risolto'}
+              </button>
+            </div>
             <div
               className='moodRowDialog'
               role='group'
@@ -1158,11 +1195,22 @@ function FeedbacksPage ({
 }) {
   const threads = useQuery(api.example.listMyFeedbackThreads, { limit: 50 })
   const [expanded, setExpanded] = useState<string | null>(null)
+  const setFeedbackSolved = useMutation(api.example.setFeedbackSolved)
+  const [updatingThreadId, setUpdatingThreadId] = useState<string | null>(null)
 
   const avgSmile =
     threads && threads.length > 0
       ? threads.reduce((acc, t) => acc + t.rating, 0) / threads.length
       : null
+
+  async function handleToggleSolved (threadId: string, isSolved: boolean) {
+    setUpdatingThreadId(threadId)
+    try {
+      await setFeedbackSolved({ threadId, isSolved })
+    } finally {
+      setUpdatingThreadId(null)
+    }
+  }
 
   return (
     <div className='feedbacksPage'>
@@ -1197,7 +1245,14 @@ function FeedbacksPage ({
                     <code>{row.normalizedUrl}</code>
                   </div>
                 </div>
-                <div className='cardStars'>{moodStars(row.rating)}</div>
+                <div className='cardRowAside'>
+                  <span
+                    className={`feedbackStatusBadge ${row.isSolved ? 'feedbackStatusBadgeSolved' : 'feedbackStatusBadgeOpen'}`}
+                  >
+                    {row.isSolved ? 'Risolto' : 'Aperto'}
+                  </span>
+                  <div className='cardStars'>{moodStars(row.rating)}</div>
+                </div>
               </div>
               <div className='cardNote'>
                 <strong>Nota iniziale:</strong>{' '}
@@ -1206,6 +1261,20 @@ function FeedbacksPage ({
                 )}
               </div>
               <div className='cardActions'>
+                <button
+                  type='button'
+                  className='secondaryBtn'
+                  disabled={updatingThreadId === row.threadId}
+                  onClick={() => {
+                    void handleToggleSolved(row.threadId, !row.isSolved)
+                  }}
+                >
+                  {updatingThreadId === row.threadId
+                    ? 'Salvataggio…'
+                    : row.isSolved
+                      ? 'Segna come non risolto'
+                      : 'Segna come risolto'}
+                </button>
                 <button
                   type='button'
                   className='textLinkBtn'
