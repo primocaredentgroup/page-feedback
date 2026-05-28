@@ -20,8 +20,17 @@ It also supports a shared page-purpose layer per `normalizedUrl` with:
 - lightweight `indicators` attached to each objective
 - discussion threads attached to each objective
 
+For guided testing and training, the component can also model role-based test
+paths:
+
+- admins define roles such as `AM`
+- admins attach ordered tests to each role, with optional `videoUrl`
+- users can have multiple roles assigned at the same time
+- users complete each test by submitting required feedback
+
 It also includes a singleton `settings` record for optional bug-report and
-improvement-request URLs controlled by the consumer app.
+improvement-request URLs controlled by the consumer app. `settings` also stores
+`adminUserIds`, a simple built-in allowlist for role/test administration.
 
 Found a bug? Feature request?
 [File it here](https://github.com/primocaredentgroup/page-feedback/issues).
@@ -74,6 +83,18 @@ export const {
   toggleReaction,
   getSettings,
   setSettings,
+  listRoles,
+  upsertRole,
+  archiveRole,
+  listRoleTestsForRole,
+  upsertRoleTest,
+  archiveRoleTest,
+  assignRoleToUser,
+  removeRoleFromUser,
+  listRoleAssignments,
+  listMyAssignedRoleTests,
+  getRoleTestDetail,
+  completeRoleTestWithFeedback,
 } = exposeApi(components.pageFeedback, {
   auth: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -94,11 +115,19 @@ export const {
 })
 ```
 
+If you omit `adminAuth`, `exposeApi` uses `settings.adminUserIds` as the admin
+check. When the list is empty, the first authenticated caller can bootstrap the
+settings:
+
+```ts
+await setSettings({ adminUserIds: ['user_123'] })
+```
+
 See more example usage in [example.ts](./example/convex/example.ts).
 
 ## Data model
 
-The component stores data in eight tables:
+The component stores data in twelve tables:
 
 - `feedbackThreads`: latest feedback snapshot for each `userId + normalizedUrl`, including `isSolved`
 - `feedbackVersions`: append-only history for each feedback thread
@@ -107,10 +136,19 @@ The component stores data in eight tables:
 - `pageObjectives`: shared objectives for a normalized page URL
 - `objectiveIndicators`: ordered indicators for a single objective
 - `objectiveComments`: discussion messages attached to a page objective
+- `roles`: admin-defined user roles, for example `AM`
+- `roleTests`: ordered tests attached to a role, including target URL and optional `videoUrl`
+- `userRoleAssignments`: many-to-many assignments so one user can have multiple roles
+- `roleTestProgress`: per-user test completion declarations linked to feedback threads
 - `settings`: singleton configuration document keyed internally as `global`
 
 The URL is normalized inside both the component and the client wrapper by taking
 everything before `?`.
+
+`roleTestProgress.isCompleted` is the only field used for role-test completion
+percentages. It is a user declaration saved by `completeRoleTestWithFeedback`.
+`feedbackThreads.isSolved` is only a feedback discussion state and never affects
+test completion.
 
 ## Public component API
 
@@ -134,7 +172,19 @@ The installed component exposes these public functions:
 - `lib.getCommentReactions({ commentId, currentUserId? })`
 - `lib.toggleReaction({ userId, commentId, emoji })`
 - `lib.getSettings({})`
-- `lib.setSettings({ bugReportUrl?, improvementRequestUrl? })`
+- `lib.setSettings({ bugReportUrl?, improvementRequestUrl?, adminUserIds? })`
+- `lib.listRoles({ limit? })`
+- `lib.upsertRole({ roleId?, name, description?, status, order })`
+- `lib.archiveRole({ roleId })`
+- `lib.listRoleTestsForRole({ roleId, limit? })`
+- `lib.upsertRoleTest({ roleTestId?, roleId, title, description, targetUrl, videoUrl?, status, order })`
+- `lib.archiveRoleTest({ roleTestId })`
+- `lib.assignRoleToUser({ userId, roleId })`
+- `lib.removeRoleFromUser({ userId, roleId })`
+- `lib.listRoleAssignments({ userId?, roleId?, limit? })`
+- `lib.listMyAssignedRoleTests({ userId })`
+- `lib.getRoleTestDetail({ userId, roleTestId })`
+- `lib.completeRoleTestWithFeedback({ userId, roleTestId, rating, note })`
 
 `rating` is constrained to integers from `1` to `3`.
 
@@ -143,6 +193,12 @@ rating or note still creates a new row in `feedbackVersions`, while changing
 `isSolved` only updates the latest thread snapshot. For compatibility with
 existing installations, older threads without `isSolved` are treated as
 unsolved until they are updated.
+
+`completeRoleTestWithFeedback` requires a non-empty `note`, reuses the existing
+versioned feedback system for the test target URL, then writes
+`roleTestProgress.isCompleted = true` in the same mutation. For example, if role
+`AM` has four active tests, the returned role progress moves through
+`0`, `25`, `50`, `75`, and `100` percent as the user completes them.
 
 This release intentionally does **not** include mentions or realtime typing.
 Those can be layered in later without coupling the component to a specific user

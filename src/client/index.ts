@@ -10,12 +10,99 @@ const ratingValidator = v.union(
 );
 
 const nullableStringValidator = v.union(v.string(), v.null());
+const roleOutputValidator = v.object({
+  _id: v.string(),
+  _creationTime: v.number(),
+  name: v.string(),
+  description: v.optional(v.string()),
+  status: v.union(v.literal("active"), v.literal("archived")),
+  order: v.number(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+});
+const roleTestOutputValidator = v.object({
+  _id: v.string(),
+  _creationTime: v.number(),
+  roleId: v.string(),
+  title: v.string(),
+  description: v.string(),
+  targetUrl: v.string(),
+  videoUrl: v.optional(v.string()),
+  status: v.union(v.literal("active"), v.literal("archived")),
+  order: v.number(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+});
+const roleAssignmentOutputValidator = v.object({
+  _id: v.string(),
+  _creationTime: v.number(),
+  userId: v.string(),
+  roleId: v.string(),
+  createdAt: v.number(),
+});
+const roleTestProgressOutputValidator = v.object({
+  _id: v.string(),
+  _creationTime: v.number(),
+  userId: v.string(),
+  roleTestId: v.string(),
+  isCompleted: v.boolean(),
+  feedbackThreadId: v.string(),
+  completedAt: v.number(),
+  updatedAt: v.number(),
+});
+const latestFeedbackOutputValidator = v.object({
+  threadId: v.string(),
+  version: v.number(),
+  rating: ratingValidator,
+  note: v.string(),
+  isSolved: v.boolean(),
+  userId: v.string(),
+  normalizedUrl: v.string(),
+  updatedAt: v.number(),
+});
+const roleTestWithProgressOutputValidator = v.object({
+  test: roleTestOutputValidator,
+  feedback: v.union(v.null(), latestFeedbackOutputValidator),
+  progress: v.union(v.null(), roleTestProgressOutputValidator),
+  isCompleted: v.boolean(),
+  completedAt: v.union(v.number(), v.null()),
+});
+const assignedRoleTestsOutputValidator = v.object({
+  role: roleOutputValidator,
+  assignment: roleAssignmentOutputValidator,
+  tests: v.array(roleTestWithProgressOutputValidator),
+  totalTests: v.number(),
+  completedTests: v.number(),
+  completionPercentage: v.number(),
+});
+const roleTestDetailOutputValidator = v.object({
+  role: roleOutputValidator,
+  test: roleTestOutputValidator,
+  feedback: v.union(v.null(), latestFeedbackOutputValidator),
+  progress: v.union(v.null(), roleTestProgressOutputValidator),
+  isCompleted: v.boolean(),
+  completedAt: v.union(v.number(), v.null()),
+});
+const settingsOutputValidator = v.object({
+  bugReportUrl: nullableStringValidator,
+  improvementRequestUrl: nullableStringValidator,
+  adminUserIds: v.array(v.string()),
+  updatedAt: v.union(v.number(), v.null()),
+});
 
 type UserOperation =
   | { type: "readMyFeedback"; normalizedUrl: string }
   | { type: "readObjectives"; normalizedUrl: string }
   | { type: "readMyFeedbackThreads" }
+  | { type: "readMyRoleTests" }
+  | { type: "readRoleTestDetail"; roleTestId: string }
   | { type: "writeFeedback"; normalizedUrl: string }
+  | { type: "completeRoleTest"; roleTestId: string }
+  | { type: "manageSettings" }
+  | { type: "manageRoles" }
+  | { type: "manageObjectives"; normalizedUrl?: string; objectiveId?: string }
+  | { type: "manageRoleTests"; roleId?: string; roleTestId?: string }
+  | { type: "assignRole"; roleId: string; userId: string }
   | { type: "setFeedbackSolved"; threadId: string }
   | { type: "readFeedbackVersions"; normalizedUrl: string }
   | { type: "readComments"; threadId: string }
@@ -151,7 +238,10 @@ export function exposeApi(
         order: v.number(),
       },
       handler: async (ctx, args) => {
-        await requireAdminAuth(options, ctx);
+        await requireAdminAuth(options, component, ctx, {
+          type: "manageObjectives",
+          normalizedUrl: normalizeFeedbackUrl(args.url),
+        });
 
         return await ctx.runMutation(component.lib.upsertObjective, {
           objectiveId: args.objectiveId,
@@ -182,13 +272,224 @@ export function exposeApi(
         order: v.number(),
       },
       handler: async (ctx, args) => {
-        await requireAdminAuth(options, ctx);
+        await requireAdminAuth(options, component, ctx, {
+          type: "manageObjectives",
+          objectiveId: args.objectiveId,
+        });
 
         return await ctx.runMutation(component.lib.upsertIndicator, {
           indicatorId: args.indicatorId,
           objectiveId: args.objectiveId,
           description: args.description,
           order: args.order,
+        });
+      },
+    }),
+
+    listRoles: queryGeneric({
+      args: {
+        limit: v.optional(v.number()),
+      },
+      returns: v.array(roleOutputValidator),
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, { type: "manageRoles" });
+
+        return await ctx.runQuery(component.lib.listRoles, {
+          limit: args.limit,
+        });
+      },
+    }),
+
+    upsertRole: mutationGeneric({
+      args: {
+        roleId: v.optional(v.string()),
+        name: v.string(),
+        description: v.optional(nullableStringValidator),
+        status: v.union(v.literal("active"), v.literal("archived")),
+        order: v.number(),
+      },
+      returns: roleOutputValidator,
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, { type: "manageRoles" });
+
+        return await ctx.runMutation(component.lib.upsertRole, args);
+      },
+    }),
+
+    archiveRole: mutationGeneric({
+      args: {
+        roleId: v.string(),
+      },
+      returns: roleOutputValidator,
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, { type: "manageRoles" });
+
+        return await ctx.runMutation(component.lib.archiveRole, {
+          roleId: args.roleId,
+        });
+      },
+    }),
+
+    listRoleTestsForRole: queryGeneric({
+      args: {
+        roleId: v.string(),
+        limit: v.optional(v.number()),
+      },
+      returns: v.array(roleTestOutputValidator),
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, {
+          type: "manageRoleTests",
+          roleId: args.roleId,
+        });
+
+        return await ctx.runQuery(component.lib.listRoleTestsForRole, {
+          roleId: args.roleId,
+          limit: args.limit,
+        });
+      },
+    }),
+
+    upsertRoleTest: mutationGeneric({
+      args: {
+        roleTestId: v.optional(v.string()),
+        roleId: v.string(),
+        title: v.string(),
+        description: v.string(),
+        targetUrl: v.string(),
+        videoUrl: v.optional(nullableStringValidator),
+        status: v.union(v.literal("active"), v.literal("archived")),
+        order: v.number(),
+      },
+      returns: roleTestOutputValidator,
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, {
+          type: "manageRoleTests",
+          roleId: args.roleId,
+          roleTestId: args.roleTestId,
+        });
+
+        return await ctx.runMutation(component.lib.upsertRoleTest, {
+          ...args,
+          targetUrl: normalizeFeedbackUrl(args.targetUrl),
+        });
+      },
+    }),
+
+    archiveRoleTest: mutationGeneric({
+      args: {
+        roleTestId: v.string(),
+      },
+      returns: roleTestOutputValidator,
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, {
+          type: "manageRoleTests",
+          roleTestId: args.roleTestId,
+        });
+
+        return await ctx.runMutation(component.lib.archiveRoleTest, {
+          roleTestId: args.roleTestId,
+        });
+      },
+    }),
+
+    assignRoleToUser: mutationGeneric({
+      args: {
+        userId: v.string(),
+        roleId: v.string(),
+      },
+      returns: roleAssignmentOutputValidator,
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, {
+          type: "assignRole",
+          roleId: args.roleId,
+          userId: args.userId,
+        });
+
+        return await ctx.runMutation(component.lib.assignRoleToUser, args);
+      },
+    }),
+
+    removeRoleFromUser: mutationGeneric({
+      args: {
+        userId: v.string(),
+        roleId: v.string(),
+      },
+      returns: v.null(),
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, {
+          type: "assignRole",
+          roleId: args.roleId,
+          userId: args.userId,
+        });
+
+        return await ctx.runMutation(component.lib.removeRoleFromUser, args);
+      },
+    }),
+
+    listRoleAssignments: queryGeneric({
+      args: {
+        userId: v.optional(v.string()),
+        roleId: v.optional(v.string()),
+        limit: v.optional(v.number()),
+      },
+      returns: v.array(roleAssignmentOutputValidator),
+      handler: async (ctx, args) => {
+        await requireAdminAuth(options, component, ctx, { type: "manageRoles" });
+
+        return await ctx.runQuery(component.lib.listRoleAssignments, args);
+      },
+    }),
+
+    listMyAssignedRoleTests: queryGeneric({
+      args: {},
+      returns: v.array(assignedRoleTestsOutputValidator),
+      handler: async (ctx) => {
+        const userId = await options.auth(ctx, {
+          type: "readMyRoleTests",
+        });
+
+        return await ctx.runQuery(component.lib.listMyAssignedRoleTests, {
+          userId,
+        });
+      },
+    }),
+
+    getRoleTestDetail: queryGeneric({
+      args: {
+        roleTestId: v.string(),
+      },
+      returns: roleTestDetailOutputValidator,
+      handler: async (ctx, args) => {
+        const userId = await options.auth(ctx, {
+          type: "readRoleTestDetail",
+          roleTestId: args.roleTestId,
+        });
+
+        return await ctx.runQuery(component.lib.getRoleTestDetail, {
+          userId,
+          roleTestId: args.roleTestId,
+        });
+      },
+    }),
+
+    completeRoleTestWithFeedback: mutationGeneric({
+      args: {
+        roleTestId: v.string(),
+        rating: ratingValidator,
+        note: v.string(),
+      },
+      returns: roleTestDetailOutputValidator,
+      handler: async (ctx, args) => {
+        const userId = await options.auth(ctx, {
+          type: "completeRoleTest",
+          roleTestId: args.roleTestId,
+        });
+
+        return await ctx.runMutation(component.lib.completeRoleTestWithFeedback, {
+          userId,
+          roleTestId: args.roleTestId,
+          rating: args.rating,
+          note: args.note,
         });
       },
     }),
@@ -358,6 +659,7 @@ export function exposeApi(
 
     getSettings: queryGeneric({
       args: {},
+      returns: settingsOutputValidator,
       handler: async (ctx) => {
         return await ctx.runQuery(component.lib.getSettings, {});
       },
@@ -367,9 +669,13 @@ export function exposeApi(
       args: {
         bugReportUrl: v.optional(nullableStringValidator),
         improvementRequestUrl: v.optional(nullableStringValidator),
+        adminUserIds: v.optional(v.array(v.string())),
       },
+      returns: settingsOutputValidator,
       handler: async (ctx, args) => {
-        await requireAdminAuth(options, ctx);
+        await requireAdminAuth(options, component, ctx, {
+          type: "manageSettings",
+        });
 
         return await ctx.runMutation(component.lib.setSettings, args);
       },
@@ -420,15 +726,45 @@ export function normalizeFeedbackUrl(url: string) {
 
 async function requireAdminAuth(
   options: {
+    auth: (ctx: { auth: Auth }, operation: UserOperation) => Promise<string>;
     adminAuth?: (ctx: { auth: Auth }) => Promise<void>;
   },
-  ctx: { auth: Auth },
+  component: ComponentApi,
+  ctx: {
+    auth: Auth;
+    runQuery: (
+      query: ComponentApi["lib"]["getSettings"],
+      args: Record<string, never>,
+    ) => Promise<{ adminUserIds: string[] }>;
+  },
+  operation: Extract<
+    UserOperation,
+    | { type: "manageSettings" }
+    | { type: "manageRoles" }
+    | { type: "manageObjectives" }
+    | { type: "manageRoleTests" }
+    | { type: "assignRole" }
+  >,
 ) {
-  if (!options.adminAuth) {
-    throw new Error("adminAuth is required to expose setSettings");
+  if (options.adminAuth) {
+    await options.adminAuth(ctx);
+    return;
   }
 
-  await options.adminAuth(ctx);
+  const userId = await options.auth(ctx, operation);
+  const settings = await ctx.runQuery(component.lib.getSettings, {});
+
+  if (settings.adminUserIds.length === 0) {
+    if (operation.type === "manageSettings") {
+      return;
+    }
+
+    throw new Error("admin settings are not configured");
+  }
+
+  if (!settings.adminUserIds.includes(userId)) {
+    throw new Error("admin access required");
+  }
 }
 
 function parseLimit(limitParam: string | null) {

@@ -66,6 +66,107 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      archiveRole: FunctionReference<
+        "mutation",
+        "internal",
+        { roleId: string },
+        {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description?: string;
+          name: string;
+          order: number;
+          status: "active" | "archived";
+          updatedAt: number;
+        },
+        Name
+      >;
+      archiveRoleTest: FunctionReference<
+        "mutation",
+        "internal",
+        { roleTestId: string },
+        {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description: string;
+          order: number;
+          roleId: string;
+          status: "active" | "archived";
+          targetUrl: string;
+          title: string;
+          updatedAt: number;
+          videoUrl?: string;
+        },
+        Name
+      >;
+      assignRoleToUser: FunctionReference<
+        "mutation",
+        "internal",
+        { roleId: string; userId: string },
+        {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          roleId: string;
+          userId: string;
+        },
+        Name
+      >;
+      completeRoleTestWithFeedback: FunctionReference<
+        "mutation",
+        "internal",
+        { note: string; rating: 1 | 2 | 3; roleTestId: string; userId: string },
+        {
+          completedAt: number | null;
+          feedback: null | {
+            isSolved: boolean;
+            normalizedUrl: string;
+            note: string;
+            rating: 1 | 2 | 3;
+            threadId: string;
+            updatedAt: number;
+            userId: string;
+            version: number;
+          };
+          isCompleted: boolean;
+          progress: null | {
+            _creationTime: number;
+            _id: string;
+            completedAt: number;
+            feedbackThreadId: string;
+            isCompleted: boolean;
+            roleTestId: string;
+            updatedAt: number;
+            userId: string;
+          };
+          role: {
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            description?: string;
+            name: string;
+            order: number;
+            status: "active" | "archived";
+            updatedAt: number;
+          };
+          test: {
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            description: string;
+            order: number;
+            roleId: string;
+            status: "active" | "archived";
+            targetUrl: string;
+            title: string;
+            updatedAt: number;
+            videoUrl?: string;
+          };
+        },
+        Name
+      >;
       deleteComment: FunctionReference<
         "mutation",
         "internal",
@@ -126,11 +227,65 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      getRoleTestDetail: FunctionReference<
+        "query",
+        "internal",
+        { roleTestId: string; userId: string },
+        {
+          completedAt: number | null;
+          feedback: null | {
+            isSolved: boolean;
+            normalizedUrl: string;
+            note: string;
+            rating: 1 | 2 | 3;
+            threadId: string;
+            updatedAt: number;
+            userId: string;
+            version: number;
+          };
+          isCompleted: boolean;
+          progress: null | {
+            _creationTime: number;
+            _id: string;
+            completedAt: number;
+            feedbackThreadId: string;
+            isCompleted: boolean;
+            roleTestId: string;
+            updatedAt: number;
+            userId: string;
+          };
+          role: {
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            description?: string;
+            name: string;
+            order: number;
+            status: "active" | "archived";
+            updatedAt: number;
+          };
+          test: {
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            description: string;
+            order: number;
+            roleId: string;
+            status: "active" | "archived";
+            targetUrl: string;
+            title: string;
+            updatedAt: number;
+            videoUrl?: string;
+          };
+        },
+        Name
+      >;
       getSettings: FunctionReference<
         "query",
         "internal",
         {},
         {
+          adminUserIds: Array<string>;
           bugReportUrl: string | null;
           improvementRequestUrl: string | null;
           updatedAt: number | null;
@@ -209,6 +364,71 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      listMyAssignedRoleTests: FunctionReference<
+        "query",
+        "internal",
+        { userId: string },
+        Array<{
+          assignment: {
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            roleId: string;
+            userId: string;
+          };
+          completedTests: number;
+          completionPercentage: number;
+          role: {
+            _creationTime: number;
+            _id: string;
+            createdAt: number;
+            description?: string;
+            name: string;
+            order: number;
+            status: "active" | "archived";
+            updatedAt: number;
+          };
+          tests: Array<{
+            completedAt: number | null;
+            feedback: null | {
+              isSolved: boolean;
+              normalizedUrl: string;
+              note: string;
+              rating: 1 | 2 | 3;
+              threadId: string;
+              updatedAt: number;
+              userId: string;
+              version: number;
+            };
+            isCompleted: boolean;
+            progress: null | {
+              _creationTime: number;
+              _id: string;
+              completedAt: number;
+              feedbackThreadId: string;
+              isCompleted: boolean;
+              roleTestId: string;
+              updatedAt: number;
+              userId: string;
+            };
+            test: {
+              _creationTime: number;
+              _id: string;
+              createdAt: number;
+              description: string;
+              order: number;
+              roleId: string;
+              status: "active" | "archived";
+              targetUrl: string;
+              title: string;
+              updatedAt: number;
+              videoUrl?: string;
+            };
+          }>;
+          totalTests: number;
+        }>,
+        Name
+      >;
       listMyFeedbackThreads: FunctionReference<
         "query",
         "internal",
@@ -258,6 +478,61 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      listRoleAssignments: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number; roleId?: string; userId?: string },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          roleId: string;
+          userId: string;
+        }>,
+        Name
+      >;
+      listRoles: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description?: string;
+          name: string;
+          order: number;
+          status: "active" | "archived";
+          updatedAt: number;
+        }>,
+        Name
+      >;
+      listRoleTestsForRole: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number; roleId: string },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description: string;
+          order: number;
+          roleId: string;
+          status: "active" | "archived";
+          targetUrl: string;
+          title: string;
+          updatedAt: number;
+          videoUrl?: string;
+        }>,
+        Name
+      >;
+      removeRoleFromUser: FunctionReference<
+        "mutation",
+        "internal",
+        { roleId: string; userId: string },
+        null,
+        Name
+      >;
       setFeedbackSolved: FunctionReference<
         "mutation",
         "internal",
@@ -277,8 +552,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       setSettings: FunctionReference<
         "mutation",
         "internal",
-        { bugReportUrl?: string | null; improvementRequestUrl?: string | null },
         {
+          adminUserIds?: Array<string>;
+          bugReportUrl?: string | null;
+          improvementRequestUrl?: string | null;
+        },
+        {
+          adminUserIds: Array<string>;
           bugReportUrl: string | null;
           improvementRequestUrl: string | null;
           updatedAt: number | null;
@@ -355,6 +635,56 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           order: number;
           status: "active" | "archived";
           updatedAt: number;
+        },
+        Name
+      >;
+      upsertRole: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          description?: string | null;
+          name: string;
+          order: number;
+          roleId?: string;
+          status: "active" | "archived";
+        },
+        {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description?: string;
+          name: string;
+          order: number;
+          status: "active" | "archived";
+          updatedAt: number;
+        },
+        Name
+      >;
+      upsertRoleTest: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          description: string;
+          order: number;
+          roleId: string;
+          roleTestId?: string;
+          status: "active" | "archived";
+          targetUrl: string;
+          title: string;
+          videoUrl?: string | null;
+        },
+        {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          description: string;
+          order: number;
+          roleId: string;
+          status: "active" | "archived";
+          targetUrl: string;
+          title: string;
+          updatedAt: number;
+          videoUrl?: string;
         },
         Name
       >;

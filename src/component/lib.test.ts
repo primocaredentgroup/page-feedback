@@ -139,6 +139,7 @@ describe('feedback-page component', () => {
     expect(settings.improvementRequestUrl).toBe(
       'https://linear.example.com/improvement',
     )
+    expect(settings.adminUserIds).toEqual([])
   })
 
   test('adds comments, enforces ownership and toggles reactions', async () => {
@@ -276,5 +277,138 @@ describe('feedback-page component', () => {
       'Questo objective e` molto utile per discutere la pagina.',
     )
     expect(comments[0].authorId).toBe('user_2')
+  })
+
+  test('assigns multiple roles to one user and calculates completion from isCompleted', async () => {
+    const t = initConvexTest()
+    const amRole = await t.mutation(api.lib.upsertRole, {
+      name: 'AM',
+      description: 'Account manager',
+      status: 'active',
+      order: 0,
+    })
+    const salesRole = await t.mutation(api.lib.upsertRole, {
+      name: 'Sales',
+      description: 'Sales team',
+      status: 'active',
+      order: 1,
+    })
+
+    const tests = []
+    for (let index = 0; index < 4; index += 1) {
+      tests.push(await t.mutation(api.lib.upsertRoleTest, {
+        roleId: amRole._id,
+        title: `AM test ${index + 1}`,
+        description: `Complete AM test ${index + 1}`,
+        targetUrl: `https://app.example.com/am/${index + 1}?demo=true`,
+        videoUrl: index === 0 ? 'https://video.example.com/am-1' : null,
+        status: 'active',
+        order: index,
+      }))
+    }
+    await t.mutation(api.lib.upsertRoleTest, {
+      roleId: salesRole._id,
+      title: 'Sales test 1',
+      description: 'Complete Sales test 1',
+      targetUrl: 'https://app.example.com/sales/1',
+      status: 'active',
+      order: 0,
+    })
+
+    await t.mutation(api.lib.assignRoleToUser, {
+      userId: 'user_1',
+      roleId: amRole._id,
+    })
+    await t.mutation(api.lib.assignRoleToUser, {
+      userId: 'user_1',
+      roleId: salesRole._id,
+    })
+
+    const initialProgress = await t.query(api.lib.listMyAssignedRoleTests, {
+      userId: 'user_1',
+    })
+    expect(initialProgress.map((block) => block.role.name)).toEqual(['AM', 'Sales'])
+    expect(initialProgress[0].completionPercentage).toBe(0)
+
+    const expectedPercentages = [25, 50, 75, 100]
+    for (const [index, roleTest] of tests.entries()) {
+      await t.mutation(api.lib.completeRoleTestWithFeedback, {
+        userId: 'user_1',
+        roleTestId: roleTest._id,
+        rating: 3,
+        note: `Feedback ${index + 1}`,
+      })
+      const progress = await t.query(api.lib.listMyAssignedRoleTests, {
+        userId: 'user_1',
+      })
+      expect(progress[0].completionPercentage).toBe(expectedPercentages[index])
+      expect(progress[0].tests[index].isCompleted).toBe(true)
+    }
+  })
+
+  test('requires feedback note and ignores isSolved when calculating test completion', async () => {
+    const t = initConvexTest()
+    const role = await t.mutation(api.lib.upsertRole, {
+      name: 'AM',
+      status: 'active',
+      order: 0,
+    })
+    const firstTest = await t.mutation(api.lib.upsertRoleTest, {
+      roleId: role._id,
+      title: 'First test',
+      description: 'Do the first test',
+      targetUrl: 'https://app.example.com/tests/first?step=1',
+      status: 'active',
+      order: 0,
+    })
+    const archivedTest = await t.mutation(api.lib.upsertRoleTest, {
+      roleId: role._id,
+      title: 'Archived test',
+      description: 'This test should not count',
+      targetUrl: 'https://app.example.com/tests/archived',
+      status: 'active',
+      order: 1,
+    })
+
+    await t.mutation(api.lib.assignRoleToUser, {
+      userId: 'user_1',
+      roleId: role._id,
+    })
+
+    await expect(t.mutation(api.lib.completeRoleTestWithFeedback, {
+      userId: 'user_1',
+      roleTestId: firstTest._id,
+      rating: 2,
+      note: '   ',
+    })).rejects.toThrow('feedback note is required to complete a test')
+
+    const completed = await t.mutation(api.lib.completeRoleTestWithFeedback, {
+      userId: 'user_1',
+      roleTestId: firstTest._id,
+      rating: 2,
+      note: 'The target is clear enough',
+    })
+    await t.mutation(api.lib.setFeedbackSolved, {
+      userId: 'admin',
+      threadId: completed.feedback?.threadId ?? completed.progress!.feedbackThreadId,
+      isSolved: true,
+    })
+    await t.mutation(api.lib.archiveRoleTest, {
+      roleTestId: archivedTest._id,
+    })
+
+    const progress = await t.query(api.lib.listMyAssignedRoleTests, {
+      userId: 'user_1',
+    })
+    const detail = await t.query(api.lib.getRoleTestDetail, {
+      userId: 'user_1',
+      roleTestId: firstTest._id,
+    })
+
+    expect(progress[0].totalTests).toBe(1)
+    expect(progress[0].completedTests).toBe(1)
+    expect(progress[0].completionPercentage).toBe(100)
+    expect(detail.feedback?.isSolved).toBe(true)
+    expect(detail.isCompleted).toBe(true)
   })
 })

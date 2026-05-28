@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+- Add role-based test plans: roles, tests per role, multi-role user assignments, and per-test progress.
+- Require mandatory feedback to mark a test complete (`completeRoleTestWithFeedback`).
+- Extend `exposeApi` with admin and user operations for roles, tests, assignments, and progress.
+- Store `adminUserIds` in settings for built-in admin allowlisting when `adminAuth` is not provided.
+- Update the demo app with admin setup, user test dialog, and improved test-detail UI.
+
 ## 1.1.0
 
 - Add thread-level `isSolved` support with `setFeedbackSolved`, keeping feedback versions append-only.

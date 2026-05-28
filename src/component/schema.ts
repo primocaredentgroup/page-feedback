@@ -12,6 +12,16 @@ const objectiveStatusValidator = v.union(
   v.literal("archived"),
 );
 
+const roleStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("archived"),
+);
+
+const roleTestStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("archived"),
+);
+
 export default defineSchema({
   feedbackThreads: defineTable({
     userId: v.string(),
@@ -61,8 +71,56 @@ export default defineSchema({
     key: v.string(),
     bugReportUrl: v.optional(v.string()),
     improvementRequestUrl: v.optional(v.string()),
+    adminUserIds: v.optional(v.array(v.string())),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  roles: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    status: roleStatusValidator,
+    order: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status_and_order", ["status", "order"])
+    .index("by_order", ["order"]),
+
+  roleTests: defineTable({
+    roleId: v.id("roles"),
+    title: v.string(),
+    description: v.string(),
+    targetUrl: v.string(),
+    videoUrl: v.optional(v.string()),
+    status: roleTestStatusValidator,
+    order: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_roleId_and_order", ["roleId", "order"])
+    .index("by_roleId_and_status_and_order", ["roleId", "status", "order"]),
+
+  userRoleAssignments: defineTable({
+    userId: v.string(),
+    roleId: v.id("roles"),
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_roleId", ["roleId"])
+    .index("by_userId_and_roleId", ["userId", "roleId"]),
+
+  roleTestProgress: defineTable({
+    userId: v.string(),
+    roleTestId: v.id("roleTests"),
+    isCompleted: v.boolean(),
+    feedbackThreadId: v.id("feedbackThreads"),
+    completedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_roleTestId", ["roleTestId"])
+    .index("by_feedbackThreadId", ["feedbackThreadId"])
+    .index("by_userId_and_roleTestId", ["userId", "roleTestId"]),
 
   pageObjectives: defineTable({
     normalizedUrl: v.string(),

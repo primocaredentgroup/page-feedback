@@ -74,13 +74,35 @@ const DEMO_OBJECTIVES: Record<
   ],
 }
 
-type RouteId = (typeof DEMO_PAGES)[number]['id'] | 'feedbacks'
+type RouteId = (typeof DEMO_PAGES)[number]['id'] | 'feedbacks' | 'tests'
 
 const MOODS = [
   { rating: 1 as const, emoji: '😞', label: 'Scontento' },
   { rating: 2 as const, emoji: '😐', label: 'Così così' },
   { rating: 3 as const, emoji: '😊', label: 'Contento' },
 ]
+
+type AssignedRoleTests = Array<{
+  role: {
+    _id: string
+    name: string
+    description?: string
+  }
+  assignment: {
+    _id: string
+  }
+  tests: Array<{
+    test: {
+      _id: string
+      title: string
+      targetUrl: string
+    }
+    isCompleted: boolean
+  }>
+  totalTests: number
+  completedTests: number
+  completionPercentage: number
+}>
 
 function normalizeUrl (url: string) {
   return url.trim().split('?')[0]?.trim() ?? ''
@@ -1088,12 +1110,20 @@ function FeedbackDialog ({
 function FeedbackDock ({
   pageUrl,
   onOpenDialog,
+  onOpenRoleTests,
+  roleCompletionPercentage,
+  completedRoleTests,
+  totalRoleTests,
 }: {
   pageUrl: string
   onOpenDialog: (opts: {
     startAt: 'form' | 'thread' | 'objective'
     presetRating: 1 | 2 | 3 | null
   }) => void
+  onOpenRoleTests: () => void
+  roleCompletionPercentage: number
+  completedRoleTests: number
+  totalRoleTests: number
 }) {
   const myFeedback = useQuery(api.example.getMyFeedback, { url: pageUrl })
   const objectives = useQuery(api.example.listObjectivesForUrl, { url: pageUrl })
@@ -1154,6 +1184,18 @@ function FeedbackDock ({
             <span className='badgeCount'>{myFeedback ? commentCount : '—'}</span>
           </button>
         </div>
+        <button
+          type='button'
+          className='dockProgressButton'
+          title='Apri i test assegnati'
+          onClick={onOpenRoleTests}
+        >
+          <span className='dockProgressLabel'>Test</span>
+          <span className='dockProgressPercent'>{roleCompletionPercentage}%</span>
+          <span className='dockProgressMeta'>
+            {completedRoleTests}/{totalRoleTests}
+          </span>
+        </button>
       </div>
     </footer>
   )
@@ -1162,12 +1204,20 @@ function FeedbackDock ({
 function ContentPage ({
   page,
   onOpenFeedback,
+  onOpenRoleTests,
+  roleCompletionPercentage,
+  completedRoleTests,
+  totalRoleTests,
 }: {
   page: (typeof DEMO_PAGES)[number]
   onOpenFeedback: (opts: {
     startAt: 'form' | 'thread' | 'objective'
     presetRating: 1 | 2 | 3 | null
   }) => void
+  onOpenRoleTests: () => void
+  roleCompletionPercentage: number
+  completedRoleTests: number
+  totalRoleTests: number
 }) {
   return (
     <article className='contentPage'>
@@ -1183,6 +1233,10 @@ function ContentPage ({
       <FeedbackDock
         pageUrl={page.url}
         onOpenDialog={onOpenFeedback}
+        onOpenRoleTests={onOpenRoleTests}
+        roleCompletionPercentage={roleCompletionPercentage}
+        completedRoleTests={completedRoleTests}
+        totalRoleTests={totalRoleTests}
       />
     </article>
   )
@@ -1311,8 +1365,549 @@ function FeedbacksPage ({
   )
 }
 
+function RoleTestsPage () {
+  const demoUserId = 'demo-user'
+  const settings = useQuery(api.example.getSettings, {})
+  const configuredAdmins = settings?.adminUserIds ?? []
+  const demoUserIsAdmin = configuredAdmins.includes(demoUserId)
+  const roles = useQuery(
+    api.example.listRoles,
+    demoUserIsAdmin ? { limit: 50 } : 'skip',
+  )
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
+  const roleTests = useQuery(
+    api.example.listRoleTestsForRole,
+    demoUserIsAdmin && selectedRoleId
+      ? { roleId: selectedRoleId, limit: 50 }
+      : 'skip',
+  )
+  const roleAssignments = useQuery(
+    api.example.listRoleAssignments,
+    demoUserIsAdmin ? { userId: demoUserId, limit: 50 } : 'skip',
+  )
+  const setSettings = useMutation(api.example.setSettings)
+  const upsertRole = useMutation(api.example.upsertRole)
+  const upsertRoleTest = useMutation(api.example.upsertRoleTest)
+  const assignRoleToUser = useMutation(api.example.assignRoleToUser)
+  const [roleName, setRoleName] = useState('AM')
+  const [roleDescription, setRoleDescription] = useState('Account manager')
+  const [testTitle, setTestTitle] = useState('Verifica chiarezza target')
+  const [testDescription, setTestDescription] = useState(
+    'Apri la pagina target, segui le istruzioni e lascia un feedback concreto.',
+  )
+  const [testTargetUrl, setTestTargetUrl] = useState<string>(DEMO_PAGES[0].url)
+  const [testVideoUrl, setTestVideoUrl] = useState('')
+  const [isSavingAdmin, setIsSavingAdmin] = useState(false)
+
+  const currentRole = roles?.find((role) => role._id === selectedRoleId) ?? roles?.[0]
+  const currentRoleId = currentRole?._id ?? null
+
+  useEffect(() => {
+    if (!selectedRoleId && roles && roles.length > 0) {
+      setSelectedRoleId(roles[0]._id)
+    }
+  }, [roles, selectedRoleId])
+
+  async function handleEnableDemoAdmin () {
+    setIsSavingAdmin(true)
+    try {
+      await setSettings({
+        adminUserIds: Array.from(new Set([...configuredAdmins, demoUserId])),
+      })
+    } finally {
+      setIsSavingAdmin(false)
+    }
+  }
+
+  async function handleCreateRole () {
+    const name = roleName.trim()
+    if (!name) {
+      return
+    }
+
+    setIsSavingAdmin(true)
+    try {
+      const createdRole = await upsertRole({
+        name,
+        description: roleDescription.trim() || null,
+        status: 'active',
+        order: roles?.length ?? 0,
+      })
+      setSelectedRoleId(createdRole._id)
+    } finally {
+      setIsSavingAdmin(false)
+    }
+  }
+
+  async function handleCreateRoleTest () {
+    if (!currentRoleId || !testTitle.trim() || !testDescription.trim()) {
+      return
+    }
+
+    setIsSavingAdmin(true)
+    try {
+      await upsertRoleTest({
+        roleId: currentRoleId,
+        title: testTitle.trim(),
+        description: testDescription.trim(),
+        targetUrl: testTargetUrl.trim(),
+        videoUrl: testVideoUrl.trim() || null,
+        status: 'active',
+        order: roleTests?.length ?? 0,
+      })
+    } finally {
+      setIsSavingAdmin(false)
+    }
+  }
+
+  async function handleAssignSelectedRole () {
+    if (!currentRoleId) {
+      return
+    }
+
+    setIsSavingAdmin(true)
+    try {
+      await assignRoleToUser({
+        roleId: currentRoleId,
+        userId: demoUserId,
+      })
+    } finally {
+      setIsSavingAdmin(false)
+    }
+  }
+
+  return (
+    <div className='roleTestsPage'>
+      <section className='roleHero'>
+        <div>
+          <p className='eyebrow'>Percorso guidato</p>
+          <h1>Test per ruolo con feedback obbligatorio</h1>
+          <p className='lead'>
+            L utente puo` avere piu` ruoli. Ogni test si completa solo quando
+            dichiara `isCompleted` tramite feedback obbligatorio; `isSolved` resta
+            fuori dal calcolo.
+          </p>
+        </div>
+        <div className='targetProgressBadge'>
+          <span className='targetIcon'>🎯</span>
+          <span>Target + progressi per ruolo</span>
+        </div>
+      </section>
+
+      <section className='adminDemoPanel'>
+        <div className='sectionHeader'>
+          <div>
+            <h2>Admin demo</h2>
+            <p className='muted'>
+              In un app reale gli admin vengono configurati in settings tramite
+              `adminUserIds`.
+            </p>
+          </div>
+          <button
+            type='button'
+            className='secondaryBtn'
+            disabled={isSavingAdmin || demoUserIsAdmin}
+            onClick={handleEnableDemoAdmin}
+          >
+            {demoUserIsAdmin ? 'demo-user e` admin' : 'Rendi demo-user admin'}
+          </button>
+        </div>
+
+        <div className='adminGrid'>
+          <div className='adminCard'>
+            <h3>1. Crea ruolo</h3>
+            <label className='fieldLabel' htmlFor='role-name'>Nome ruolo</label>
+            <input
+              id='role-name'
+              className='dialogInput'
+              value={roleName}
+              onChange={(event) => setRoleName(event.target.value)}
+            />
+            <label className='fieldLabel' htmlFor='role-description'>Descrizione</label>
+            <input
+              id='role-description'
+              className='dialogInput'
+              value={roleDescription}
+              onChange={(event) => setRoleDescription(event.target.value)}
+            />
+            <button
+              type='button'
+              className='primaryBtn primaryBtnInline'
+              disabled={isSavingAdmin || !roleName.trim()}
+              onClick={handleCreateRole}
+            >
+              Salva ruolo
+            </button>
+          </div>
+
+          <div className='adminCard'>
+            <h3>2. Disegna test</h3>
+            <label className='fieldLabel' htmlFor='role-select'>Ruolo</label>
+            <select
+              id='role-select'
+              className='dialogInput'
+              value={currentRoleId ?? ''}
+              onChange={(event) => setSelectedRoleId(event.target.value || null)}
+            >
+              {roles?.map((role) => (
+                <option key={role._id} value={role._id}>{role.name}</option>
+              ))}
+            </select>
+            <label className='fieldLabel' htmlFor='test-title'>Titolo test</label>
+            <input
+              id='test-title'
+              className='dialogInput'
+              value={testTitle}
+              onChange={(event) => setTestTitle(event.target.value)}
+            />
+            <label className='fieldLabel' htmlFor='test-description'>Cosa fare</label>
+            <textarea
+              id='test-description'
+              className='dialogTextarea'
+              rows={3}
+              value={testDescription}
+              onChange={(event) => setTestDescription(event.target.value)}
+            />
+            <label className='fieldLabel' htmlFor='test-target'>Target URL</label>
+            <input
+              id='test-target'
+              className='dialogInput'
+              value={testTargetUrl}
+              onChange={(event) => setTestTargetUrl(event.target.value)}
+            />
+            <label className='fieldLabel' htmlFor='test-video'>Video URL facoltativo</label>
+            <input
+              id='test-video'
+              className='dialogInput'
+              value={testVideoUrl}
+              onChange={(event) => setTestVideoUrl(event.target.value)}
+              placeholder='https://...'
+            />
+            <button
+              type='button'
+              className='primaryBtn primaryBtnInline'
+              disabled={isSavingAdmin || !currentRoleId}
+              onClick={handleCreateRoleTest}
+            >
+              Aggiungi test
+            </button>
+          </div>
+
+          <div className='adminCard'>
+            <h3>3. Assegna ruolo</h3>
+            <p className='muted'>
+              Utente demo: <code>{demoUserId}</code>
+            </p>
+            <button
+              type='button'
+              className='primaryBtn primaryBtnInline'
+              disabled={isSavingAdmin || !currentRoleId}
+              onClick={handleAssignSelectedRole}
+            >
+              Assegna ruolo selezionato
+            </button>
+            <ul className='assignmentList'>
+              {roleAssignments?.map((assignment) => {
+                const assignedRole = roles?.find((role) => role._id === assignment.roleId)
+                return (
+                  <li key={assignment._id}>
+                    {assignedRole?.name ?? assignment.roleId}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function UserRoleTestsDialog ({
+  open,
+  assignedRoles,
+  onClose,
+}: {
+  open: boolean
+  assignedRoles: AssignedRoleTests | undefined
+  onClose: () => void
+}) {
+  const [selectedTestId, setSelectedTestId] = useState<string | null>(null)
+  const totalTests =
+    assignedRoles?.reduce((sum, block) => sum + block.totalTests, 0) ?? 0
+  const completedTests =
+    assignedRoles?.reduce((sum, block) => sum + block.completedTests, 0) ?? 0
+  const completionPercentage =
+    totalTests === 0 ? 0 : Math.round((completedTests / totalTests) * 100)
+  const firstAvailableTestId = useMemo(() => {
+    if (!assignedRoles) {
+      return null
+    }
+
+    for (const roleBlock of assignedRoles) {
+      const missingTest = roleBlock.tests.find((row) => !row.isCompleted)
+      if (missingTest) {
+        return missingTest.test._id
+      }
+    }
+
+    return assignedRoles[0]?.tests[0]?.test._id ?? null
+  }, [assignedRoles])
+
+  if (!open) {
+    return null
+  }
+
+  const effectiveSelectedTestId = selectedTestId ?? firstAvailableTestId
+
+  return (
+    <div
+      className='dialogOverlay dialogOverlayCentered'
+      role='presentation'
+      onClick={onClose}
+    >
+      <div
+        className='dialogPanel dialogPanelWide userTestsDialog'
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='user-tests-dialog-title'
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className='dialogHeader'>
+          <div>
+            <h2 id='user-tests-dialog-title' className='dialogTitle'>
+              I tuoi test assegnati
+            </h2>
+            <p className='dialogSubtitle'>
+              Completa ogni test lasciando il feedback richiesto.
+            </p>
+          </div>
+          <button type='button' className='dialogClose' onClick={onClose}>×</button>
+        </div>
+
+        <div className='userTestsLayout'>
+          <aside className='userTestsSidebar'>
+            <div className='userTestsOverall'>
+              <div className='userTestsOverallRing' aria-hidden='true'>
+                <span>{completionPercentage}%</span>
+              </div>
+              <div className='userTestsOverallCopy'>
+                <strong>Avanzamento complessivo</strong>
+                <span>
+                  {completedTests} di {totalTests} test completati
+                </span>
+              </div>
+            </div>
+            <div className='userTestsOverallBar' aria-hidden='true'>
+              <div
+                className='userTestsOverallBarFill'
+                style={{ width: `${completionPercentage}%` }}
+              />
+            </div>
+
+            {assignedRoles === undefined && (
+              <p className='muted'>Caricamento test…</p>
+            )}
+            {assignedRoles?.length === 0 && (
+              <p className='muted'>
+                Nessun test assegnato. Chiedi a un admin di assegnarti un ruolo.
+              </p>
+            )}
+            {assignedRoles?.map((roleBlock) => (
+              <section key={roleBlock.assignment._id} className='userTestsRoleGroup'>
+                <div className='userTestsRoleHeader'>
+                  <div>
+                    <span className='userTestsRoleLabel'>Ruolo</span>
+                    <strong>{roleBlock.role.name}</strong>
+                  </div>
+                  <span className='userTestsRolePercent'>
+                    {roleBlock.completionPercentage}%
+                  </span>
+                </div>
+                <ul className='userTestsList'>
+                  {roleBlock.tests.map((row) => (
+                    <li key={row.test._id}>
+                      <button
+                        type='button'
+                        className={`userTestListButton ${effectiveSelectedTestId === row.test._id ? 'userTestListButtonActive' : ''}`}
+                        onClick={() => setSelectedTestId(row.test._id)}
+                      >
+                        <span
+                          className={`completionDot ${row.isCompleted ? 'completionDotDone' : ''}`}
+                          aria-hidden='true'
+                        />
+                        <span className='userTestListTitle'>{row.test.title}</span>
+                        <span
+                          className={`userTestStatePill ${row.isCompleted ? 'userTestStatePillDone' : 'userTestStatePillPending'}`}
+                        >
+                          {row.isCompleted ? 'Completato' : 'Da fare'}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </aside>
+
+          <RoleTestDetailPanel roleTestId={effectiveSelectedTestId} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RoleTestDetailPanel ({
+  roleTestId,
+}: {
+  roleTestId: string | null
+}) {
+  const detail = useQuery(
+    api.example.getRoleTestDetail,
+    roleTestId ? { roleTestId } : 'skip',
+  )
+  const completeRoleTest = useMutation(api.example.completeRoleTestWithFeedback)
+  const [rating, setRating] = useState<1 | 2 | 3>(3)
+  const [note, setNote] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    if (!roleTestId) {
+      setRating(3)
+      setNote('')
+    }
+  }, [roleTestId])
+
+  if (!roleTestId) {
+    return (
+      <section className='roleTestDetailEmpty'>
+        <p className='muted'>Seleziona un test per vedere istruzioni e feedback.</p>
+      </section>
+    )
+  }
+
+  async function handleComplete () {
+    if (!roleTestId || !note.trim()) {
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await completeRoleTest({
+        roleTestId,
+        rating,
+        note: note.trim(),
+      })
+      setNote('')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className='roleTestDetailPanel'>
+      {detail === undefined && (
+        <div className='roleTestDetailLoading'>
+          <p className='muted'>Caricamento test…</p>
+        </div>
+      )}
+      {detail && (
+        <div className='roleTestDetailContent'>
+          <header className='roleTestDetailHeader'>
+            <span
+              className={`roleTestStatusPill ${detail.isCompleted ? 'roleTestStatusPillDone' : 'roleTestStatusPillPending'}`}
+            >
+              {detail.isCompleted ? 'Completato' : 'Da completare'}
+            </span>
+            <h3 className='roleTestDetailTitle'>{detail.test.title}</h3>
+            <p className='roleTestDetailRole muted'>
+              Ruolo: <strong>{detail.role.name}</strong>
+            </p>
+          </header>
+
+          <div className='roleTestInstructionsCard'>
+            <h4 className='roleTestSectionTitle'>Cosa fare</h4>
+            <p className='roleTestInstructionsText'>{detail.test.description}</p>
+            <div className='roleTestTargetChip'>
+              <span className='roleTestTargetIcon' aria-hidden='true'>🎯</span>
+              <code>{detail.test.targetUrl}</code>
+            </div>
+            {detail.test.videoUrl && (
+              <a
+                className='roleTestVideoBtn'
+                href={detail.test.videoUrl}
+                target='_blank'
+                rel='noreferrer'
+              >
+                Guarda il video esplicativo
+              </a>
+            )}
+          </div>
+
+          <div className='roleTestFeedbackCard'>
+            <h4 className='roleTestSectionTitle'>Feedback obbligatorio</h4>
+            <p className='roleTestFeedbackHint muted'>
+              Per segnare il test come completato devi lasciare una valutazione e
+              una nota descrittiva.
+            </p>
+            <div
+              className='moodRow moodRowDialog roleTestMoodRow'
+              role='group'
+              aria-label='Valutazione test'
+            >
+              {MOODS.map((mood) => (
+                <button
+                  key={mood.rating}
+                  type='button'
+                  className={`moodBtn ${rating === mood.rating ? 'moodBtnActive' : ''}`}
+                  title={mood.label}
+                  aria-pressed={rating === mood.rating}
+                  onClick={() => setRating(mood.rating)}
+                >
+                  <span className='moodEmoji'>{mood.emoji}</span>
+                  <span className='moodStarsSmall'>{moodStars(mood.rating)}</span>
+                </button>
+              ))}
+            </div>
+            <label className='fieldLabel' htmlFor='role-test-note'>
+              La tua nota
+            </label>
+            <textarea
+              id='role-test-note'
+              className='dialogTextarea roleTestNoteInput'
+              rows={4}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder='Descrivi cosa hai provato, cosa ha funzionato e cosa miglioreresti.'
+            />
+            <button
+              type='button'
+              className='primaryBtn roleTestSubmitBtn'
+              disabled={isSaving || !note.trim()}
+              onClick={handleComplete}
+            >
+              {isSaving
+                ? 'Salvataggio…'
+                : detail.isCompleted
+                  ? 'Aggiorna feedback'
+                  : 'Completa test con feedback'}
+            </button>
+            {detail.feedback?.note.trim() && (
+              <p className='roleTestPreviousFeedback muted'>
+                Ultimo feedback salvato: «{detail.feedback.note}»
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function App () {
   const [route, setRoute] = useState<RouteId>('page-1')
+  const [roleTestsDialogOpen, setRoleTestsDialogOpen] = useState(false)
+  const assignedRoles = useQuery(api.example.listMyAssignedRoleTests, {})
   const [dialog, setDialog] = useState<{
     open: boolean
     pageUrl: string
@@ -1328,6 +1923,14 @@ function App () {
   })
 
   const activePage = DEMO_PAGES.find((p) => p.id === route)
+  const totalRoleTests =
+    assignedRoles?.reduce((sum, block) => sum + block.totalTests, 0) ?? 0
+  const completedRoleTests =
+    assignedRoles?.reduce((sum, block) => sum + block.completedTests, 0) ?? 0
+  const roleCompletionPercentage =
+    totalRoleTests === 0
+      ? 0
+      : Math.round((completedRoleTests / totalRoleTests) * 100)
 
   const openFeedbackDialog = useCallback(
     (
@@ -1350,6 +1953,14 @@ function App () {
     setDialog((d) => ({ ...d, open: false }))
   }, [])
 
+  const openRoleTestsDialog = useCallback(() => {
+    setRoleTestsDialogOpen(true)
+  }, [])
+
+  const closeRoleTestsDialog = useCallback(() => {
+    setRoleTestsDialogOpen(false)
+  }, [])
+
   return (
     <div className='appRoot'>
       <nav className='topNav' aria-label='Pagine demo'>
@@ -1370,6 +1981,13 @@ function App () {
         >
           Feedbacks
         </button>
+        <button
+          type='button'
+          className={`navTab ${route === 'tests' ? 'navTabActive' : ''}`}
+          onClick={() => setRoute('tests')}
+        >
+          Test per ruolo
+        </button>
       </nav>
 
       <main className={`appMain ${activePage ? 'appMainWithDock' : ''}`}>
@@ -1378,6 +1996,10 @@ function App () {
             page={activePage}
             onOpenFeedback={(opts) =>
               openFeedbackDialog(activePage.url, activePage.title, opts)}
+            onOpenRoleTests={openRoleTestsDialog}
+            roleCompletionPercentage={roleCompletionPercentage}
+            completedRoleTests={completedRoleTests}
+            totalRoleTests={totalRoleTests}
           />
         )}
         {route === 'feedbacks' && (
@@ -1390,6 +2012,7 @@ function App () {
             }}
           />
         )}
+        {route === 'tests' && <RoleTestsPage />}
       </main>
 
       <FeedbackDialog
@@ -1399,6 +2022,11 @@ function App () {
         startAt={dialog.startAt}
         presetRating={dialog.presetRating}
         onClose={closeDialog}
+      />
+      <UserRoleTestsDialog
+        open={roleTestsDialogOpen}
+        assignedRoles={assignedRoles}
+        onClose={closeRoleTestsDialog}
       />
     </div>
   )

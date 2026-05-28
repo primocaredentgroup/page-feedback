@@ -123,6 +123,18 @@ export const {
   upsertObjective,
   listIndicatorsForObjective,
   upsertIndicator,
+  listRoles,
+  upsertRole,
+  archiveRole,
+  listRoleTestsForRole,
+  upsertRoleTest,
+  archiveRoleTest,
+  assignRoleToUser,
+  removeRoleFromUser,
+  listRoleAssignments,
+  listMyAssignedRoleTests,
+  getRoleTestDetail,
+  completeRoleTestWithFeedback,
   listMyFeedbackThreads,
   listComments,
   listObjectiveComments,
@@ -134,9 +146,6 @@ export const {
 } = exposeApi(components.pageFeedback, {
   auth: async (ctx) => {
     return await getAuthUserId(ctx);
-  },
-  adminAuth: async (ctx) => {
-    await requireAdmin(ctx);
   },
 });
 

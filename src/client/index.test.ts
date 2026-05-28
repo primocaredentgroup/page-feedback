@@ -12,6 +12,18 @@ export const {
   upsertObjective,
   listIndicatorsForObjective,
   upsertIndicator,
+  listRoles,
+  upsertRole,
+  archiveRole,
+  listRoleTestsForRole,
+  upsertRoleTest,
+  archiveRoleTest,
+  assignRoleToUser,
+  removeRoleFromUser,
+  listRoleAssignments,
+  listMyAssignedRoleTests,
+  getRoleTestDetail,
+  completeRoleTestWithFeedback,
   listMyFeedbackThreads,
   listComments,
   listObjectiveComments,
@@ -25,6 +37,26 @@ export const {
   adminAuth: async () => {},
 })
 
+export const {
+  setSettings: defaultSetSettings,
+  upsertRole: defaultAdminUpsertRole,
+} = exposeApi(components.pageFeedback, {
+  auth: async (ctx) => {
+    return (await ctx.auth.getUserIdentity())?.tokenIdentifier ?? 'anonymous'
+  },
+})
+
+export const {
+  upsertRole: throwingAdminUpsertRole,
+} = exposeApi(components.pageFeedback, {
+  auth: async (ctx) => {
+    return (await ctx.auth.getUserIdentity())?.tokenIdentifier ?? 'anonymous'
+  },
+  adminAuth: async () => {
+    throw new Error('adminAuth called')
+  },
+})
+
 const testApi = (
   anyApi as unknown as ApiFromModules<{
     'index.test': {
@@ -36,6 +68,21 @@ const testApi = (
       upsertObjective: typeof upsertObjective;
       listIndicatorsForObjective: typeof listIndicatorsForObjective;
       upsertIndicator: typeof upsertIndicator;
+      listRoles: typeof listRoles;
+      upsertRole: typeof upsertRole;
+      archiveRole: typeof archiveRole;
+      listRoleTestsForRole: typeof listRoleTestsForRole;
+      upsertRoleTest: typeof upsertRoleTest;
+      archiveRoleTest: typeof archiveRoleTest;
+      assignRoleToUser: typeof assignRoleToUser;
+      removeRoleFromUser: typeof removeRoleFromUser;
+      listRoleAssignments: typeof listRoleAssignments;
+      listMyAssignedRoleTests: typeof listMyAssignedRoleTests;
+      getRoleTestDetail: typeof getRoleTestDetail;
+      completeRoleTestWithFeedback: typeof completeRoleTestWithFeedback;
+      defaultSetSettings: typeof defaultSetSettings;
+      defaultAdminUpsertRole: typeof defaultAdminUpsertRole;
+      throwingAdminUpsertRole: typeof throwingAdminUpsertRole;
       listMyFeedbackThreads: typeof listMyFeedbackThreads;
       listComments: typeof listComments;
       listObjectiveComments: typeof listObjectiveComments;
@@ -198,5 +245,104 @@ describe('client tests', () => {
       'Il titolo spiega il contesto in meno di una riga.',
     )
     expect(comments[0].authorId).toBe('user1')
+  })
+
+  test('should expose wrapped role test workflow api', async () => {
+    const t = initConvexTest().withIdentity({
+      tokenIdentifier: 'user1',
+      subject: 'user1',
+    })
+
+    const amRole = await t.mutation(testApi.upsertRole, {
+      name: 'AM',
+      description: 'Account manager',
+      status: 'active',
+      order: 0,
+    })
+    const qaRole = await t.mutation(testApi.upsertRole, {
+      name: 'QA',
+      description: null,
+      status: 'active',
+      order: 1,
+    })
+    const firstTest = await t.mutation(testApi.upsertRoleTest, {
+      roleId: amRole._id,
+      title: 'Review target',
+      description: 'Open the target and leave feedback.',
+      targetUrl: 'https://app.example.com/am?step=1',
+      videoUrl: 'https://video.example.com/am',
+      status: 'active',
+      order: 0,
+    })
+
+    await t.mutation(testApi.assignRoleToUser, {
+      userId: 'user1',
+      roleId: amRole._id,
+    })
+    await t.mutation(testApi.assignRoleToUser, {
+      userId: 'user1',
+      roleId: qaRole._id,
+    })
+    await t.mutation(testApi.completeRoleTestWithFeedback, {
+      roleTestId: firstTest._id,
+      rating: 3,
+      note: 'This test is clear.',
+    })
+
+    const roles = await t.query(testApi.listRoles, { limit: 10 })
+    const roleTests = await t.query(testApi.listRoleTestsForRole, {
+      roleId: amRole._id,
+      limit: 10,
+    })
+    const assignments = await t.query(testApi.listRoleAssignments, {
+      userId: 'user1',
+      limit: 10,
+    })
+    const myAssignedRoleTests = await t.query(testApi.listMyAssignedRoleTests, {})
+    const detail = await t.query(testApi.getRoleTestDetail, {
+      roleTestId: firstTest._id,
+    })
+
+    expect(roles.map((role) => role.name)).toEqual(['AM', 'QA'])
+    expect(roleTests[0].targetUrl).toBe('https://app.example.com/am')
+    expect(assignments).toHaveLength(2)
+    expect(myAssignedRoleTests).toHaveLength(2)
+    expect(myAssignedRoleTests[0].completionPercentage).toBe(100)
+    expect(detail.isCompleted).toBe(true)
+    expect(detail.feedback?.note).toBe('This test is clear.')
+  })
+
+  test('default admin check uses settings adminUserIds and adminAuth can override', async () => {
+    const base = initConvexTest()
+    const admin = base.withIdentity({
+      tokenIdentifier: 'admin-user',
+      subject: 'admin-user',
+    })
+
+    await admin.mutation(testApi.defaultSetSettings, {
+      adminUserIds: ['admin-user'],
+    })
+    await admin.mutation(testApi.defaultAdminUpsertRole, {
+      name: 'Admin role',
+      status: 'active',
+      order: 0,
+    })
+
+    const nonAdmin = base.withIdentity({
+      tokenIdentifier: 'regular-user',
+      subject: 'regular-user',
+    })
+
+    await expect(nonAdmin.mutation(testApi.defaultAdminUpsertRole, {
+      name: 'Blocked role',
+      status: 'active',
+      order: 1,
+    })).rejects.toThrow('admin access required')
+
+    await expect(admin.mutation(testApi.throwingAdminUpsertRole, {
+      name: 'Override role',
+      status: 'active',
+      order: 2,
+    })).rejects.toThrow('adminAuth called')
   })
 })
