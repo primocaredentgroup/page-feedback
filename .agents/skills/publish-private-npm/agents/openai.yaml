@@ -1,0 +1,4 @@
+interface:
+  display_name: "Publish Private npm"
+  short_description: "Publish private npm packages from GitHub"
+  default_prompt: "Use $publish-private-npm to configure and verify stable private npm publishing from GitHub Actions; default to a patch release unless minor or major is explicitly requested."

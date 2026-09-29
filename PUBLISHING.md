@@ -1,84 +1,35 @@
 # Publishing
 
-In order for other people to install and use this component, you can publish the
-package to npm.
+Follow [the shared npm release skill](.agents/skills/publish-private-npm/SKILL.md) and its references for every release.
 
-You will first need to have an npmjs account with permissions to push to your
-package name.
+`@okrlinkhub/page-feedback` is an existing **public** package. Keep `publishConfig.access: public` and publish with `--access public --tag latest`; the shared skill's private-only audit reports two expected visibility exceptions for this package.
 
-If this is your first time, here are the recommended steps:
+## Stable releases from main
 
-1. Ensure the package.json "name" matches what you want it to be called. It
-   should either be like `my-package` or `@my-org/my-package`. If it's the
-   latter, ensure you have an npmjs account with permissions to push to
-   `my-org`.
-2. `npm login` to login to npmjs.
-3. `npm run clean` to clean your `/dist` directory.
-4. `npm ci` to install the dependencies with the versions specified in
-   `package-lock.json`.
-5. `npm run build` to build the package fresh.
-6. (Optional) `npm run typecheck` to typecheck the package.
-7. (Optional) `npm run lint` to lint the package.
-8. (Optional) `npm run test` to test the package.
-9. (Optional) `npm pack` will create a .tgz file of the package. You can then
-   try installing it in another project with
-   `npm install ./path/to/your-package.tgz` to sanity check that it works as
-   expected. You can remove the .tgz file after.
-10. `npm publish --access public` to publish the package to npm.
-11. `git tag v0.1.0` to tag the new version.
-12. `git push --follow-tags` to push the tags to the repository. This way, other
-    contributors can always see what code was published with each version.
-    Running `npm version ...` will create these tags and commits automatically.
+`.github/workflows/publish-npm.yml` publishes pushes to `main`. If the incoming commit keeps the same version, the workflow creates and pushes a patch release commit containing `package.json` and `package-lock.json`. An explicitly committed stable version is preserved; prereleases and downgrades are rejected. Release through GitHub Actions so npm matches committed source.
 
-After the initial publish, you can use the release scripts documented below,
-which will do steps 3-12 automatically (except the sanity check in step 9).
+Use a patch by default. To prepare an explicit patch locally, run `npm run release`, then commit both manifests. Use `npm version minor --no-git-tag-version` or `npm version major --no-git-tag-version` only when that release level was explicitly requested. There is no alpha publication channel.
 
-## Package scripts for releasing
+## Validation
 
-In package.json, there are some scripts that are useful for doing releases.
-
-- `preversion` will run the tests and typecheck the code before marking a new
-  version.
-- `version` will open the changelog in vim and then save it before committing
-  the new version.
-- `prepublishOnly` will make a clean build of the package before publishing.
-
-These are not required and can be modified or removed if desired. They will all
-be run automatically when using one of the deployment commands.
-
-## Deploying a new alpha version
+From a clean checkout:
 
 ```sh
-npm run alpha
-```
-
-This will create a prerelease version with an `@alpha` tag. It will then publish
-the package to npm and push the code and new tag. Users can install the package
-with `npm install @your-package@alpha`.
-
-## Deploying a new release version
-
-```sh
-npm run release
-```
-
-This will create a patch version and publish as `latest`. It will then publish
-the package to npm and push the code and new tag. To publish a new minor or
-major version, you can run the commands manually:
-
-```sh
-npm version minor # or major
-npm publish
-git push --follow-tags
-```
-
-## Building a one-off package
-
-```sh
-npm run clean
+npm ci
+CONVEX_AGENT_MODE=anonymous npx convex init
 npm run build
-npm pack
+CONVEX_AGENT_MODE=anonymous npx convex dev --once --run-sh "npm run codegen"
+git diff --exit-code -- src/component/_generated
+npm run verify
+npm pack --dry-run
 ```
 
-You can then provide the .tgz file to others to install via
-`npm install ./path/to/your-package.tgz`.
+Convex 1.33.1 stops the local anonymous backend when `init` exits, so the workflow keeps it running through `convex dev --once --run-sh` while generating the component types. The example imports the built package, which is why a build precedes this local codegen step.
+
+The verification script runs build, tests, typechecks and lint. `prepublishOnly` also runs verification for direct npm calls. The workflow checks the remote branch head immediately before publishing.
+
+## Authentication
+
+The workflow uses npm Trusted Publishing (OIDC) for `primocaredentgroup/page-feedback`, workflow file `publish-npm.yml`, and no GitHub Environment. Configure the matching publisher in npm before the first workflow release. The Actions workflow uses Node 24, npm 11.15.0, `contents: write`, and `id-token: write`. `NPM_READ_TOKEN` is only for dependency installation when needed; never place a write token in source.
+
+After publication, verify the stable version and `latest` tag through authenticated npm access. Do not move tags, unpublish versions, or remove credentials implicitly.

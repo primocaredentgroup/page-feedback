@@ -7,6 +7,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 export default [
   {
     ignores: [
+      ".agents/**",
       "dist/**",
       "example/dist/**",
       "*.config.{js,mjs,cjs,ts,tsx}",
