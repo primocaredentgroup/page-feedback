@@ -49,5 +49,5 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  pageFeedback: import("@okrlinkhub/page-feedback/_generated/component.js").ComponentApi<"pageFeedback">;
+  pageFeedback: import("../../../src/component/_generated/component.js").ComponentApi<"pageFeedback">;
 };

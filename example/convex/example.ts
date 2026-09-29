@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server.js";
 import { components } from "./_generated/api.js";
-import { exposeApi } from "@okrlinkhub/page-feedback";
+import { exposeApi } from "../../src/client/index.js";
 import { v } from "convex/values";
 import type { Auth } from "convex/server";
 

@@ -2,6 +2,7 @@ import { httpActionGeneric, mutationGeneric, queryGeneric } from "convex/server"
 import type { Auth, HttpRouter } from "convex/server";
 import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
+export { PageFeedbackClient } from "./registry.js";
 
 const ratingValidator = v.union(
   v.literal(1),

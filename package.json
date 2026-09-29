@@ -9,7 +9,7 @@
   "bugs": {
     "url": "https://github.com/primocaredentgroup/page-feedback/issues"
   },
-  "version": "1.2.0",
+  "version": "1.2.1",
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
@@ -63,10 +63,12 @@
       "types": "./dist/component/_generated/component.d.ts"
     },
     "./convex.config.js": {
+      "@convex-dev/component-source": "./src/component/convex.config.ts",
       "types": "./dist/component/convex.config.d.ts",
       "default": "./dist/component/convex.config.js"
     },
     "./convex.config": {
+      "@convex-dev/component-source": "./src/component/convex.config.ts",
       "types": "./dist/component/convex.config.d.ts",
       "default": "./dist/component/convex.config.js"
     }

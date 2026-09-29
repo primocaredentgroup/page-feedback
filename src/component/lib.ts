@@ -274,6 +274,16 @@ export const listLatestFeedbackForUrl = query({
   },
 });
 
+/** Host adapters must authorize access before exposing this global registry. */
+export const listAllFeedbackThreads = query({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(latestFeedbackValidator),
+  handler: async (ctx, args) => {
+    const threads = await ctx.db.query("feedbackThreads").order("desc").take(getSafeLimit(args.limit));
+    return threads.map(mapThreadToLatestFeedback);
+  },
+});
+
 export const listMyFeedbackThreads = query({
   args: {
     userId: v.string(),

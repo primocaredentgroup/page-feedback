@@ -1,5 +1,5 @@
 import { httpRouter } from "convex/server";
-import { registerRoutes } from "@okrlinkhub/page-feedback";
+import { registerRoutes } from "../../src/client/index.js";
 import { components } from "./_generated/api";
 
 const http = httpRouter();

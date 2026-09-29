@@ -292,6 +292,22 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      listAllFeedbackThreads: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number },
+        Array<{
+          isSolved: boolean;
+          normalizedUrl: string;
+          note: string;
+          rating: 1 | 2 | 3;
+          threadId: string;
+          updatedAt: number;
+          userId: string;
+          version: number;
+        }>,
+        Name
+      >;
       listComments: FunctionReference<
         "query",
         "internal",
