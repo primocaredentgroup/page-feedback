@@ -12,7 +12,8 @@
   "version": "1.2.0",
   "license": "Apache-2.0",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "keywords": [
     "convex",
@@ -35,11 +36,10 @@
     "test:watch": "vitest --typecheck --clearScreen false",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:coverage": "vitest run --coverage --coverage.reporter=text",
-    "preversion": "npm ci && npm run build:clean && run-p test lint typecheck",
-    "prepublishOnly": "npm run build",
-    "alpha": "npm version prerelease --preid alpha && npm publish --tag alpha && git push --follow-tags",
-    "release": "npm version patch && npm publish && git push --follow-tags",
-    "version": "vim -c 'normal o' -c 'normal o## '$npm_package_version CHANGELOG.md && prettier -w CHANGELOG.md && git add CHANGELOG.md"
+    "prepublishOnly": "npm run verify",
+    "release": "npm version patch --no-git-tag-version",
+    "codegen": "convex codegen --component-dir ./src/component",
+    "verify": "npm run build && npm run test && npm run typecheck && npm run lint"
   },
   "files": [
     "dist",
