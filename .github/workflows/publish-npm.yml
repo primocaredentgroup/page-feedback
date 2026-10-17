@@ -78,5 +78,5 @@ jobs:
         env:
           EXPECTED_INTEGRITY: ${{ steps.pack.outputs.integrity }}
         run: |
-          npm view "@primocaredent/page-feedback@$EXPECTED_VERSION" dist.integrity --json > registry-integrity.json
+          npm view "@primocaredentgroup/page-feedback@$EXPECTED_VERSION" dist.integrity --json > registry-integrity.json
           node --input-type=module -e 'import fs from "node:fs"; import assert from "node:assert/strict"; assert.equal(JSON.parse(fs.readFileSync("registry-integrity.json")), process.env.EXPECTED_INTEGRITY);'

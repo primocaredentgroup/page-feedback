@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
-assert.equal(pkg.name, "@primocaredent/page-feedback");
+assert.equal(pkg.name, "@primocaredentgroup/page-feedback");
 assert.match(pkg.version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
 assert.equal(lock.name, pkg.name);
 assert.equal(lock.version, pkg.version);
