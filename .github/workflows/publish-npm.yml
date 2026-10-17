@@ -1,0 +1,82 @@
+name: Publish npm (manual approval)
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Approved full main commit SHA
+        required: true
+        type: string
+      expected_version:
+        description: Approved stable version
+        required: true
+        type: string
+      authentication:
+        description:
+          Token for first publication; OIDC after trusted publisher setup
+        required: true
+        default: oidc
+        type: choice
+        options: [oidc, bootstrap-token]
+permissions:
+  contents: read
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    environment: npm-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      EXPECTED_VERSION: ${{ inputs.expected_version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Verify approved commit
+        run: |
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: "24.x"
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - name: Install and verify
+        run: |
+          npm ci
+          npm run build
+          npm test
+          npm run typecheck
+          npm run lint
+          node scripts/check-release.mjs
+      - name: Pack reviewed release
+        id: pack
+        run: |
+          npm pack --json > pack.json
+          node --input-type=module -e 'import fs from "node:fs"; const [p] = JSON.parse(fs.readFileSync("pack.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, `archive=${p.filename}\nintegrity=${p.integrity}\n`);'
+      - name: Reject superseded main
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
+      - name: Publish through trusted publisher
+        if: inputs.authentication == 'oidc'
+        run:
+          npm publish '${{ steps.pack.outputs.archive }}' --access public
+          --provenance --tag latest
+      - name: Bootstrap first publication
+        if: inputs.authentication == 'bootstrap-token'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN"
+          npm publish '${{ steps.pack.outputs.archive }}' --access public --provenance --tag latest
+      - name: Verify registry artifact
+        env:
+          EXPECTED_INTEGRITY: ${{ steps.pack.outputs.integrity }}
+        run: |
+          npm view "@primocaredent/page-feedback@$EXPECTED_VERSION" dist.integrity --json > registry-integrity.json
+          node --input-type=module -e 'import fs from "node:fs"; import assert from "node:assert/strict"; assert.equal(JSON.parse(fs.readFileSync("registry-integrity.json")), process.env.EXPECTED_INTEGRITY);'

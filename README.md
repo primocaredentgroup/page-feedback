@@ -1,6 +1,6 @@
 # Convex Page Feedback
 
-[![npm version](https://badge.fury.io/js/@okrlinkhub%2Fpage-feedback.svg)](https://badge.fury.io/js/@okrlinkhub%2Fpage-feedback)
+[![npm version](https://badge.fury.io/js/@primocaredent%2Fpage-feedback.svg)](https://badge.fury.io/js/@primocaredent%2Fpage-feedback)
 
 <!-- START: Include on https://convex.dev/components -->
 
@@ -37,13 +37,17 @@ Found a bug? Feature request?
 
 ## Installation
 
+```sh
+npm install @primocaredent/page-feedback
+```
+
 Create a `convex.config.ts` file in your app's `convex/` folder and install the
 component by calling `use`:
 
 ```ts
 // convex/convex.config.ts
 import { defineApp } from 'convex/server'
-import pageFeedback from '@okrlinkhub/page-feedback/convex.config.js'
+import pageFeedback from '@primocaredent/page-feedback/convex.config.js'
 
 const app = defineApp()
 app.use(pageFeedback)
@@ -61,7 +65,7 @@ npx convex dev --typecheck-components
 
 ```ts
 import { components } from './_generated/api'
-import { exposeApi } from '@okrlinkhub/page-feedback'
+import { exposeApi } from '@primocaredent/page-feedback'
 
 export const {
   getMyFeedback,
@@ -142,8 +146,49 @@ The component stores data in twelve tables:
 - `roleTestProgress`: per-user test completion declarations linked to feedback threads
 - `settings`: singleton configuration document keyed internally as `global`
 
-The URL is normalized inside both the component and the client wrapper by taking
-everything before `?`.
+### URL identity
+
+The default `urlMode: 'page'` preserves the previous behavior exactly: trim the
+URL and take everything before `?`. A fragment without a preceding query is
+retained for compatibility.
+
+Opt in to full URL identity in your server integration:
+
+```ts
+const feedback = exposeApi(components.pageFeedback, {
+  urlMode: 'full',
+  auth: async (ctx) => { /* return the authenticated user ID */ },
+})
+registerRoutes(http, components.pageFeedback, { urlMode: 'full' })
+```
+
+Use the same mode for `exposeApi` and `registerRoutes`. Full mode trims only outer
+whitespace and preserves the origin, path, query, parameter order, encoding and
+fragment exactly. Different query values, parameter orders or fragments identify
+different threads and objectives. Pass the complete URL from your frontend (for
+example `window.location.href`); the server cannot recover omitted parameters.
+The authorization callback receives the same canonical URL used for storage.
+Direct component calls accept an optional `urlMode` argument on URL-based
+operations and `upsertRoleTest`; omission keeps page mode.
+
+New or edited role tests store their target using the selected mode. Completion
+always uses that stored target exactly, even if the host configuration changes.
+
+Existing threads, versions, objectives and role tests are never rewritten.
+Queries discarded by earlier releases cannot be recovered. After enabling full
+mode, an URL with parameters starts a separate thread; old threads remain visible
+in the registry/history and can be opened using their saved `normalizedUrl`.
+Existing role tests retain their saved targets and completion records.
+
+### Migrating from the old npm scope
+
+Install `@primocaredent/page-feedback@1.3.0` and replace imports from
+`@okrlinkhub/page-feedback`, including `/convex.config.js` and `/react`. Keep the
+Convex component mount name `pageFeedback` to preserve its existing data. Run
+Convex codegen and your application checks before deploying. Package migration
+alone retains page mode; enabling full mode is an explicit server configuration.
+Historical versions of the old package remain installable. See [Publishing](PUBLISHING.md)
+for the ordered release and deprecation procedure.
 
 `roleTestProgress.isCompleted` is the only field used for role-test completion
 percentages. It is a user declaration saved by `completeRoleTestWithFeedback`.
@@ -220,7 +265,7 @@ You can register a read-only HTTP endpoint for page feedback:
 
 ```ts
 import { httpRouter } from 'convex/server'
-import { registerRoutes } from '@okrlinkhub/page-feedback'
+import { registerRoutes } from '@primocaredent/page-feedback'
 import { components } from './_generated/api'
 
 const http = httpRouter()

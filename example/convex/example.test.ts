@@ -20,7 +20,7 @@ describe('example', () => {
     })
 
     expect(createdFeedback.version).toBe(1)
-    expect(latestFeedback?.normalizedUrl).toBe('https://app.example.com/home')
+    expect(latestFeedback?.normalizedUrl).toBe(url)
     expect(pageFeedback).toHaveLength(1)
     expect(pageFeedback[0].note).toBe('Good start')
   })
