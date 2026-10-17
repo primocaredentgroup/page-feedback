@@ -1,6 +1,6 @@
 ## 1.3.0
 
-- Move the public npm package to `@primocaredent/page-feedback`.
+- Move the public npm package to `@primocaredentgroup/page-feedback`.
 - Add opt-in `urlMode: "full"` for feedback, objectives, role targets and HTTP routes.
 - Preserve legacy page identity and existing records by default.
 - Keep role-test completion bound to the stored canonical target.

@@ -1,4 +1,4 @@
-# Publishing @primocaredent/page-feedback
+# Publishing @primocaredentgroup/page-feedback
 
 The package remains **public**. Existing `@okrlinkhub/page-feedback` versions
 remain installable. Do not unpublish them or change their artifacts.
@@ -19,7 +19,7 @@ remain installable. Do not unpublish them or change their artifacts.
    installation, run:
 
    ```sh
-   npm deprecate '@okrlinkhub/page-feedback@*' 'This package has moved to @primocaredent/page-feedback. Install @primocaredent/page-feedback; existing versions remain available.'
+   npm deprecate '@okrlinkhub/page-feedback@*' 'This package has moved to @primocaredentgroup/page-feedback. Install @primocaredentgroup/page-feedback; existing versions remain available.'
    ```
 
 6. Merge consumer PRs only after their separate approval and green checks.
@@ -28,7 +28,7 @@ remain installable. Do not unpublish them or change their artifacts.
 ## Authentication
 
 The first publication needs an npm identity with package-creation rights in
-`primocaredent`. Verify `npm whoami` and organization permissions before changing
+`primocaredentgroup`. Verify `npm whoami` and organization permissions before changing
 credentials. An unauthenticated registry 404 alone does not prove name availability.
 
 Prefer npm Trusted Publishing (OIDC) for subsequent releases, bound to:
@@ -40,7 +40,7 @@ Prefer npm Trusted Publishing (OIDC) for subsequent releases, bound to:
 
 Before the package exists, use the manual workflow's `bootstrap-token` mode with
 a short-lived granular token scoped to package creation/publication in
-`@primocaredent`. Store and organize the credential in **1Password** first; inject
+`@primocaredentgroup`. Store and organize the credential in **1Password** first; inject
 it into the `npm-release` environment secret `NPM_PUBLISH_TOKEN` only with explicit
 approval. The workflow consumes it only in the bootstrap publish step.
 

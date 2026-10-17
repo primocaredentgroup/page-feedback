@@ -1,6 +1,6 @@
 # Convex Page Feedback
 
-[![npm version](https://badge.fury.io/js/@primocaredent%2Fpage-feedback.svg)](https://badge.fury.io/js/@primocaredent%2Fpage-feedback)
+[![npm version](https://badge.fury.io/js/@primocaredentgroup%2Fpage-feedback.svg)](https://badge.fury.io/js/@primocaredentgroup%2Fpage-feedback)
 
 <!-- START: Include on https://convex.dev/components -->
 
@@ -38,7 +38,7 @@ Found a bug? Feature request?
 ## Installation
 
 ```sh
-npm install @primocaredent/page-feedback
+npm install @primocaredentgroup/page-feedback
 ```
 
 Create a `convex.config.ts` file in your app's `convex/` folder and install the
@@ -47,7 +47,7 @@ component by calling `use`:
 ```ts
 // convex/convex.config.ts
 import { defineApp } from 'convex/server'
-import pageFeedback from '@primocaredent/page-feedback/convex.config.js'
+import pageFeedback from '@primocaredentgroup/page-feedback/convex.config.js'
 
 const app = defineApp()
 app.use(pageFeedback)
@@ -65,7 +65,7 @@ npx convex dev --typecheck-components
 
 ```ts
 import { components } from './_generated/api'
-import { exposeApi } from '@primocaredent/page-feedback'
+import { exposeApi } from '@primocaredentgroup/page-feedback'
 
 export const {
   getMyFeedback,
@@ -182,7 +182,7 @@ Existing role tests retain their saved targets and completion records.
 
 ### Migrating from the old npm scope
 
-Install `@primocaredent/page-feedback@1.3.0` and replace imports from
+Install `@primocaredentgroup/page-feedback@1.3.0` and replace imports from
 `@okrlinkhub/page-feedback`, including `/convex.config.js` and `/react`. Keep the
 Convex component mount name `pageFeedback` to preserve its existing data. Run
 Convex codegen and your application checks before deploying. Package migration
@@ -265,7 +265,7 @@ You can register a read-only HTTP endpoint for page feedback:
 
 ```ts
 import { httpRouter } from 'convex/server'
-import { registerRoutes } from '@primocaredent/page-feedback'
+import { registerRoutes } from '@primocaredentgroup/page-feedback'
 import { components } from './_generated/api'
 
 const http = httpRouter()
