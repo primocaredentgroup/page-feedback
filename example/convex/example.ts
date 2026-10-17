@@ -22,6 +22,7 @@ export const upsertPageFeedback = mutation({
     return await ctx.runMutation(components.pageFeedback.lib.upsertFeedback, {
       userId: await getAuthUserId(ctx),
       url: args.url,
+      urlMode: "full",
       rating: args.rating,
       note: args.note,
     });
@@ -36,6 +37,7 @@ export const getMyPageFeedback = query({
     return await ctx.runQuery(components.pageFeedback.lib.getMyFeedback, {
       userId: await getAuthUserId(ctx),
       url: args.url,
+      urlMode: "full",
     });
   },
 });
@@ -48,6 +50,7 @@ export const listPageFeedback = query({
   handler: async (ctx, args) => {
     return await ctx.runQuery(components.pageFeedback.lib.listLatestFeedbackForUrl, {
       url: args.url,
+      urlMode: "full",
       limit: args.limit,
     });
   },
@@ -144,6 +147,7 @@ export const {
   getSettings,
   setSettings,
 } = exposeApi(components.pageFeedback, {
+  urlMode: "full",
   auth: async (ctx) => {
     return await getAuthUserId(ctx);
   },

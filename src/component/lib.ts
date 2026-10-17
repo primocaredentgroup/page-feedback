@@ -1,3 +1,4 @@
+import { normalizeFeedbackUrl as normalizeUrl, type UrlMode } from "./url.js";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
@@ -134,6 +135,7 @@ const roleTestDetailValidator = v.object({
 const upsertObjectiveArgsValidator = {
   objectiveId: v.optional(v.id("pageObjectives")),
   url: v.string(),
+  urlMode: v.optional(v.union(v.literal("page"), v.literal("full"))),
   description: v.string(),
   status: objectiveStatusValidator,
   order: v.number(),
@@ -160,6 +162,7 @@ const upsertRoleTestArgsValidator = {
   title: v.string(),
   description: v.string(),
   targetUrl: v.string(),
+  urlMode: v.optional(v.union(v.literal("page"), v.literal("full"))),
   videoUrl: v.optional(nullableStringValidator),
   status: roleTestStatusValidator,
   order: v.number(),
@@ -169,6 +172,7 @@ export const upsertFeedback = mutation({
   args: {
     userId: v.string(),
     url: v.string(),
+    urlMode: v.optional(v.union(v.literal("page"), v.literal("full"))),
     rating: ratingValidator,
     note: v.string(),
   },
@@ -177,6 +181,7 @@ export const upsertFeedback = mutation({
     return await upsertFeedbackCore(ctx, {
       userId: args.userId,
       url: args.url,
+      urlMode: args.urlMode,
       rating: args.rating,
       note: args.note,
     });
@@ -213,11 +218,12 @@ export const getMyFeedback = query({
   args: {
     userId: v.string(),
     url: v.string(),
+    urlMode: v.optional(v.union(v.literal("page"), v.literal("full"))),
   },
   returns: v.union(v.null(), latestFeedbackValidator),
   handler: async (ctx, args) => {
     const userId = normalizeUserId(args.userId);
-    const normalizedUrl = normalizeUrl(args.url);
+    const normalizedUrl = normalizeUrl(args.url, args.urlMode);
     const thread = await getFeedbackThread(ctx, userId, normalizedUrl);
 
     if (!thread) {
@@ -232,12 +238,13 @@ export const listFeedbackVersions = query({
   args: {
     userId: v.string(),
     url: v.string(),
+    urlMode: v.optional(v.union(v.literal("page"), v.literal("full"))),
     limit: v.optional(v.number()),
   },
   returns: v.array(feedbackVersionValidator),
   handler: async (ctx, args) => {
     const userId = normalizeUserId(args.userId);
-    const normalizedUrl = normalizeUrl(args.url);
+    const normalizedUrl = normalizeUrl(args.url, args.urlMode);
     const thread = await getFeedbackThread(ctx, userId, normalizedUrl);
 
     if (!thread) {
@@ -257,11 +264,12 @@ export const listFeedbackVersions = query({
 export const listLatestFeedbackForUrl = query({
   args: {
     url: v.string(),
+    urlMode: v.optional(v.union(v.literal("page"), v.literal("full"))),
     limit: v.optional(v.number()),
   },
   returns: v.array(latestFeedbackValidator),
   handler: async (ctx, args) => {
-    const normalizedUrl = normalizeUrl(args.url);
+    const normalizedUrl = normalizeUrl(args.url, args.urlMode);
     const threads = await ctx.db
       .query("feedbackThreads")
       .withIndex("by_normalizedUrl", (q) =>
@@ -416,7 +424,7 @@ export const upsertRoleTest = mutation({
       args.description,
       "test description is required",
     );
-    const targetUrl = normalizeUrl(args.targetUrl);
+    const targetUrl = normalizeUrl(args.targetUrl, args.urlMode);
     const videoUrl = normalizeOptionalText(args.videoUrl);
     const order = normalizeOrder(args.order);
     const now = Date.now();
@@ -657,6 +665,8 @@ export const completeRoleTestWithFeedback = mutation({
     const feedback = await upsertFeedbackCore(ctx, {
       userId,
       url: test.targetUrl,
+      // The target is already canonical; never strip a stored full URL.
+      urlMode: "full",
       rating: args.rating,
       note,
     });
@@ -896,10 +906,11 @@ export const toggleReaction = mutation({
 export const listObjectivesForUrl = query({
   args: {
     url: v.string(),
+    urlMode: v.optional(v.union(v.literal("page"), v.literal("full"))),
   },
   returns: v.array(pageObjectiveValidator),
   handler: async (ctx, args) => {
-    const normalizedUrl = normalizeUrl(args.url);
+    const normalizedUrl = normalizeUrl(args.url, args.urlMode);
 
     return await ctx.db
       .query("pageObjectives")
@@ -915,7 +926,7 @@ export const upsertObjective = mutation({
   args: upsertObjectiveArgsValidator,
   returns: pageObjectiveValidator,
   handler: async (ctx, args) => {
-    const normalizedUrl = normalizeUrl(args.url);
+    const normalizedUrl = normalizeUrl(args.url, args.urlMode);
     const description = normalizeRequiredText(
       args.description,
       "objective description is required",
@@ -1192,17 +1203,6 @@ function normalizeOrder(order: number) {
   return order;
 }
 
-function normalizeUrl(url: string) {
-  const trimmedUrl = url.trim();
-  const normalizedUrl = trimmedUrl.split("?")[0]?.trim() ?? "";
-
-  if (normalizedUrl.length === 0) {
-    throw new Error("url is required");
-  }
-
-  return normalizedUrl;
-}
-
 async function getFeedbackThread(
   ctx: QueryCtx | MutationCtx,
   userId: string,
@@ -1221,12 +1221,13 @@ async function upsertFeedbackCore(
   args: {
     userId: string;
     url: string;
+    urlMode?: UrlMode;
     rating: 1 | 2 | 3;
     note: string;
   },
 ) {
   const userId = normalizeUserId(args.userId);
-  const normalizedUrl = normalizeUrl(args.url);
+  const normalizedUrl = normalizeUrl(args.url, args.urlMode);
   const note = args.note.trim();
   const now = Date.now();
   const existingThread = await getFeedbackThread(ctx, userId, normalizedUrl);

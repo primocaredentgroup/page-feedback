@@ -214,7 +214,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       getMyFeedback: FunctionReference<
         "query",
         "internal",
-        { url: string; userId: string },
+        { url: string; urlMode?: "page" | "full"; userId: string },
         null | {
           isSolved: boolean;
           normalizedUrl: string;
@@ -336,7 +336,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listFeedbackVersions: FunctionReference<
         "query",
         "internal",
-        { limit?: number; url: string; userId: string },
+        {
+          limit?: number;
+          url: string;
+          urlMode?: "page" | "full";
+          userId: string;
+        },
         Array<{
           _creationTime: number;
           _id: string;
@@ -367,7 +372,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listLatestFeedbackForUrl: FunctionReference<
         "query",
         "internal",
-        { limit?: number; url: string },
+        { limit?: number; url: string; urlMode?: "page" | "full" },
         Array<{
           isSolved: boolean;
           normalizedUrl: string;
@@ -481,7 +486,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listObjectivesForUrl: FunctionReference<
         "query",
         "internal",
-        { url: string },
+        { url: string; urlMode?: "page" | "full" },
         Array<{
           _creationTime: number;
           _id: string;
@@ -599,7 +604,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       upsertFeedback: FunctionReference<
         "mutation",
         "internal",
-        { note: string; rating: 1 | 2 | 3; url: string; userId: string },
+        {
+          note: string;
+          rating: 1 | 2 | 3;
+          url: string;
+          urlMode?: "page" | "full";
+          userId: string;
+        },
         {
           isSolved: boolean;
           normalizedUrl: string;
@@ -641,6 +652,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           order: number;
           status: "active" | "archived";
           url: string;
+          urlMode?: "page" | "full";
         },
         {
           _creationTime: number;
@@ -687,6 +699,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           status: "active" | "archived";
           targetUrl: string;
           title: string;
+          urlMode?: "page" | "full";
           videoUrl?: string | null;
         },
         {

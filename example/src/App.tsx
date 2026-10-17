@@ -105,7 +105,7 @@ type AssignedRoleTests = Array<{
 }>
 
 function normalizeUrl (url: string) {
-  return url.trim().split('?')[0]?.trim() ?? ''
+  return url.trim()
 }
 
 function moodStars (rating: number) {

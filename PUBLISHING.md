@@ -1,84 +1,74 @@
-# Publishing
+# Publishing @primocaredent/page-feedback
 
-In order for other people to install and use this component, you can publish the
-package to npm.
+The package remains **public**. Existing `@okrlinkhub/page-feedback` versions
+remain installable. Do not unpublish them or change their artifacts.
 
-You will first need to have an npmjs account with permissions to push to your
-package name.
+## Approval and release order
 
-If this is your first time, here are the recommended steps:
+1. Review and merge the package PR only after William approves its exact head.
+2. Obtain separate approval to publish the exact main SHA and stable version.
+   Version `1.3.0` introduces opt-in full URL identity; later version bumps must
+   be committed in both `package.json` and `package-lock.json`.
+3. Dispatch `publish-npm.yml` from `main`, supplying the approved full SHA and
+   version. The workflow never runs on push, PR or merge, never bumps versions,
+   and rejects a superseded main before publishing. Configure the `npm-release`
+   GitHub environment with a required reviewer for an additional release gate.
+4. Verify registry name, version, `latest`, tarball integrity and a clean consumer
+   installation. Only then update/finalize the dependent consumer PR lockfiles.
+5. Obtain approval before deprecating the old package. After verifying the new
+   installation, run:
 
-1. Ensure the package.json "name" matches what you want it to be called. It
-   should either be like `my-package` or `@my-org/my-package`. If it's the
-   latter, ensure you have an npmjs account with permissions to push to
-   `my-org`.
-2. `npm login` to login to npmjs.
-3. `npm run clean` to clean your `/dist` directory.
-4. `npm ci` to install the dependencies with the versions specified in
-   `package-lock.json`.
-5. `npm run build` to build the package fresh.
-6. (Optional) `npm run typecheck` to typecheck the package.
-7. (Optional) `npm run lint` to lint the package.
-8. (Optional) `npm run test` to test the package.
-9. (Optional) `npm pack` will create a .tgz file of the package. You can then
-   try installing it in another project with
-   `npm install ./path/to/your-package.tgz` to sanity check that it works as
-   expected. You can remove the .tgz file after.
-10. `npm publish --access public` to publish the package to npm.
-11. `git tag v0.1.0` to tag the new version.
-12. `git push --follow-tags` to push the tags to the repository. This way, other
-    contributors can always see what code was published with each version.
-    Running `npm version ...` will create these tags and commits automatically.
+   ```sh
+   npm deprecate '@okrlinkhub/page-feedback@*' 'This package has moved to @primocaredent/page-feedback. Install @primocaredent/page-feedback; existing versions remain available.'
+   ```
 
-After the initial publish, you can use the release scripts documented below,
-which will do steps 3-12 automatically (except the sanity check in step 9).
+6. Merge consumer PRs only after their separate approval and green checks.
+   Deployment of consumers is a separate action.
 
-## Package scripts for releasing
+## Authentication
 
-In package.json, there are some scripts that are useful for doing releases.
+The first publication needs an npm identity with package-creation rights in
+`primocaredent`. Verify `npm whoami` and organization permissions before changing
+credentials. An unauthenticated registry 404 alone does not prove name availability.
 
-- `preversion` will run the tests and typecheck the code before marking a new
-  version.
-- `version` will open the changelog in vim and then save it before committing
-  the new version.
-- `prepublishOnly` will make a clean build of the package before publishing.
+Prefer npm Trusted Publishing (OIDC) for subsequent releases, bound to:
 
-These are not required and can be modified or removed if desired. They will all
-be run automatically when using one of the deployment commands.
+- GitHub owner: `primocaredentgroup`
+- Repository: `page-feedback`
+- Workflow filename: `publish-npm.yml`
+- Environment: `npm-release`
 
-## Deploying a new alpha version
+Before the package exists, use the manual workflow's `bootstrap-token` mode with
+a short-lived granular token scoped to package creation/publication in
+`@primocaredent`. Store and organize the credential in **1Password** first; inject
+it into the `npm-release` environment secret `NPM_PUBLISH_TOKEN` only with explicit
+approval. The workflow consumes it only in the bootstrap publish step.
 
-```sh
-npm run alpha
-```
+Once the package exists, configure and verify its trusted publisher, use `oidc`
+mode, and arrange separately approved revocation/removal of the bootstrap token.
+Do not print tokens or write their values to source, logs, issues or PRs.
 
-This will create a prerelease version with an `@alpha` tag. It will then publish
-the package to npm and push the code and new tag. Users can install the package
-with `npm install @your-package@alpha`.
+Official references: [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/),
+[granular tokens](https://docs.npmjs.com/creating-and-viewing-access-tokens/).
 
-## Deploying a new release version
+## Local validation without publishing
 
 ```sh
-npm run release
-```
-
-This will create a patch version and publish as `latest`. It will then publish
-the package to npm and push the code and new tag. To publish a new minor or
-major version, you can run the commands manually:
-
-```sh
-npm version minor # or major
-npm publish
-git push --follow-tags
-```
-
-## Building a one-off package
-
-```sh
-npm run clean
+npm ci
 npm run build
-npm pack
+npm test
+npm run typecheck
+npm run lint
+node scripts/check-release.mjs
+npm pack --json
 ```
 
-You can then provide the .tgz file to others to install via
-`npm install ./path/to/your-package.tgz`.
+Install the generated tarball in a disposable consumer checkout, regenerate
+Convex types against an isolated local deployment, and check the application.
+A tarball installation verifies the candidate artifact; it does not prove npm
+publication or a production deployment.
+
+Keep the Convex component mount name `pageFeedback` when changing npm scope.
+Existing stored URL keys and role completion records require no data migration.
+Both `exposeApi` and `registerRoutes` default to legacy page mode; configure both
+with `urlMode: 'full'` to preserve query strings and fragments.

@@ -7,6 +7,7 @@ const http = httpRouter();
 // Expose a read-only endpoint that returns the latest feedback for a page URL.
 registerRoutes(http, components.pageFeedback, {
   pathPrefix: "/feedback",
+  urlMode: "full",
 });
 
 export default http;

@@ -1,3 +1,5 @@
+import { normalizeFeedbackUrl, type UrlMode } from "../component/url.js";
+export { normalizeFeedbackUrl, type UrlMode } from "../component/url.js";
 import { httpActionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import type { Auth, HttpRouter } from "convex/server";
 import { v } from "convex/values";
@@ -120,13 +122,14 @@ export function exposeApi(
   options: {
     auth: (ctx: { auth: Auth }, operation: UserOperation) => Promise<string>;
     adminAuth?: (ctx: { auth: Auth }) => Promise<void>;
+    urlMode?: UrlMode;
   },
 ) {
   return {
     getMyFeedback: queryGeneric({
       args: { url: v.string() },
       handler: async (ctx, args) => {
-        const normalizedUrl = normalizeFeedbackUrl(args.url);
+        const normalizedUrl = normalizeFeedbackUrl(args.url, options.urlMode);
         const userId = await options.auth(ctx, {
           type: "readMyFeedback",
           normalizedUrl,
@@ -135,6 +138,7 @@ export function exposeApi(
         return await ctx.runQuery(component.lib.getMyFeedback, {
           userId,
           url: normalizedUrl,
+          urlMode: options.urlMode ?? "page",
         });
       },
     }),
@@ -146,7 +150,7 @@ export function exposeApi(
         note: v.string(),
       },
       handler: async (ctx, args) => {
-        const normalizedUrl = normalizeFeedbackUrl(args.url);
+        const normalizedUrl = normalizeFeedbackUrl(args.url, options.urlMode);
         const userId = await options.auth(ctx, {
           type: "writeFeedback",
           normalizedUrl,
@@ -155,6 +159,7 @@ export function exposeApi(
         return await ctx.runMutation(component.lib.upsertFeedback, {
           userId,
           url: normalizedUrl,
+          urlMode: options.urlMode ?? "page",
           rating: args.rating,
           note: args.note,
         });
@@ -186,7 +191,7 @@ export function exposeApi(
         limit: v.optional(v.number()),
       },
       handler: async (ctx, args) => {
-        const normalizedUrl = normalizeFeedbackUrl(args.url);
+        const normalizedUrl = normalizeFeedbackUrl(args.url, options.urlMode);
         const userId = await options.auth(ctx, {
           type: "readFeedbackVersions",
           normalizedUrl,
@@ -195,6 +200,7 @@ export function exposeApi(
         return await ctx.runQuery(component.lib.listFeedbackVersions, {
           userId,
           url: normalizedUrl,
+          urlMode: options.urlMode ?? "page",
           limit: args.limit,
         });
       },
@@ -207,7 +213,8 @@ export function exposeApi(
       },
       handler: async (ctx, args) => {
         return await ctx.runQuery(component.lib.listLatestFeedbackForUrl, {
-          url: normalizeFeedbackUrl(args.url),
+          url: normalizeFeedbackUrl(args.url, options.urlMode),
+          urlMode: options.urlMode ?? "page",
           limit: args.limit,
         });
       },
@@ -218,7 +225,7 @@ export function exposeApi(
         url: v.string(),
       },
       handler: async (ctx, args) => {
-        const normalizedUrl = normalizeFeedbackUrl(args.url);
+        const normalizedUrl = normalizeFeedbackUrl(args.url, options.urlMode);
         await options.auth(ctx, {
           type: "readObjectives",
           normalizedUrl,
@@ -226,6 +233,7 @@ export function exposeApi(
 
         return await ctx.runQuery(component.lib.listObjectivesForUrl, {
           url: normalizedUrl,
+          urlMode: options.urlMode ?? "page",
         });
       },
     }),
@@ -241,12 +249,13 @@ export function exposeApi(
       handler: async (ctx, args) => {
         await requireAdminAuth(options, component, ctx, {
           type: "manageObjectives",
-          normalizedUrl: normalizeFeedbackUrl(args.url),
+          normalizedUrl: normalizeFeedbackUrl(args.url, options.urlMode),
         });
 
         return await ctx.runMutation(component.lib.upsertObjective, {
           objectiveId: args.objectiveId,
-          url: normalizeFeedbackUrl(args.url),
+          url: normalizeFeedbackUrl(args.url, options.urlMode),
+          urlMode: options.urlMode ?? "page",
           description: args.description,
           status: args.status,
           order: args.order,
@@ -371,7 +380,8 @@ export function exposeApi(
 
         return await ctx.runMutation(component.lib.upsertRoleTest, {
           ...args,
-          targetUrl: normalizeFeedbackUrl(args.targetUrl),
+          targetUrl: normalizeFeedbackUrl(args.targetUrl, options.urlMode),
+          urlMode: options.urlMode ?? "page",
         });
       },
     }),
@@ -687,7 +697,10 @@ export function exposeApi(
 export function registerRoutes(
   http: HttpRouter,
   component: ComponentApi,
-  { pathPrefix = "/feedback" }: { pathPrefix?: string } = {},
+  {
+    pathPrefix = "/feedback",
+    urlMode = "page",
+  }: { pathPrefix?: string; urlMode?: UrlMode } = {},
 ) {
   http.route({
     path: `${pathPrefix}/latest`,
@@ -706,23 +719,14 @@ export function registerRoutes(
 
       const limit = parseLimit(limitParam);
       const feedback = await ctx.runQuery(component.lib.listLatestFeedbackForUrl, {
-        url: normalizeFeedbackUrl(url),
+        url: normalizeFeedbackUrl(url, urlMode),
+        urlMode,
         limit,
       });
 
       return jsonResponse(feedback, 200);
     }),
   });
-}
-
-export function normalizeFeedbackUrl(url: string) {
-  const normalizedUrl = url.trim().split("?")[0]?.trim() ?? "";
-
-  if (normalizedUrl.length === 0) {
-    throw new Error("url is required");
-  }
-
-  return normalizedUrl;
 }
 
 async function requireAdminAuth(
