@@ -1,12 +1,32 @@
 import { normalizeFeedbackUrl as normalizeUrl, type UrlMode } from "./url.js";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server.js";
+import { paginationOptsValidator, paginationResultValidator, type PaginationOptions } from "convex/server";
+import { internalMutation, mutation, query } from "./_generated/server.js";
+import { internal } from "./_generated/api.js";
 import type { Doc } from "./_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 import schema from "./schema.js";
 
 const SETTINGS_KEY = "global";
 const DEFAULT_LIMIT = 50;
+
+function feedbackPage(options: PaginationOptions, maxRows = 40) {
+  if (!Number.isSafeInteger(options.numItems) || options.numItems < 1) throw new Error("Page size must be a positive integer");
+  return {
+    ...options,
+    numItems: Math.min(options.numItems, maxRows),
+    maximumRowsRead: Math.max(2, Math.min(options.maximumRowsRead ?? maxRows, maxRows)),
+    maximumBytesRead: Math.max(1_500_000, Math.min(options.maximumBytesRead ?? 2_000_000, 2_000_000)),
+  };
+}
+
+function emptyPage<T>() {
+  return { page: [] as T[], isDone: true, continueCursor: "" };
+}
+
+function mapReactionFact({ _id, _creationTime, commentId, userId, emoji, createdAt }: Doc<"feedbackReactions">) {
+  return { _id, _creationTime, commentId, userId, emoji, createdAt };
+}
 
 const ratingValidator = v.union(
   v.literal(1),
@@ -36,6 +56,21 @@ const feedbackVersionValidator = schema.tables.feedbackVersions.validator.extend
 const feedbackCommentValidator = schema.tables.feedbackComments.validator.extend({
   _id: v.id("feedbackComments"),
   _creationTime: v.number(),
+});
+
+const reactionFactValidator = v.object({
+  _id: v.id("feedbackReactions"),
+  _creationTime: v.number(),
+  commentId: v.id("feedbackComments"),
+  userId: v.string(),
+  emoji: v.string(),
+  createdAt: v.number(),
+});
+
+const reactionCountValidator = schema.tables.feedbackReactionCounts.validator.extend({
+  _id: v.id("feedbackReactionCounts"),
+  _creationTime: v.number(),
+  includesMe: v.boolean(),
 });
 
 const pageObjectiveValidator = schema.tables.pageObjectives.validator.extend({
@@ -76,17 +111,7 @@ const objectiveCommentValidator = schema.tables.objectiveComments.validator.exte
   _creationTime: v.number(),
 });
 
-const reactionSummaryValidator = v.object({
-  emoji: v.string(),
-  count: v.number(),
-  users: v.array(v.string()),
-  includesMe: v.boolean(),
-});
-
-const commentWithReactionsValidator = v.object({
-  comment: feedbackCommentValidator,
-  reactions: v.array(reactionSummaryValidator),
-});
+const commentWithReactionsValidator = v.object({ comment: feedbackCommentValidator });
 
 const latestFeedbackValidator = v.object({
   threadId: v.id("feedbackThreads"),
@@ -730,6 +755,7 @@ export const addComment = mutation({
       isEdited: false,
       isDeleted: false,
       createdAt: Date.now(),
+      reactionCountsReady: true,
     });
     const comment = await ctx.db.get(commentId);
 
@@ -739,7 +765,6 @@ export const addComment = mutation({
 
     return {
       comment,
-      reactions: [],
     };
   },
 });
@@ -778,7 +803,6 @@ export const editComment = mutation({
         isEdited: true,
         editedAt,
       },
-      reactions: await getCommentReactionSummaries(ctx, args.commentId, userId),
     };
   },
 });
@@ -798,6 +822,9 @@ export const deleteComment = mutation({
     }
 
     if (comment.isDeleted) {
+      await ctx.scheduler.runAfter(0, internal.lib.cleanupDeletedCommentReactions, {
+        commentId: args.commentId,
+      });
       return null;
     }
 
@@ -805,7 +832,9 @@ export const deleteComment = mutation({
       body: "[deleted]",
       isDeleted: true,
     });
-    await deleteCommentReactions(ctx, args.commentId);
+    await ctx.scheduler.runAfter(0, internal.lib.cleanupDeletedCommentReactions, {
+      commentId: args.commentId,
+    });
 
     return null;
   },
@@ -814,45 +843,67 @@ export const deleteComment = mutation({
 export const listComments = query({
   args: {
     threadId: v.id("feedbackThreads"),
-    limit: v.optional(v.number()),
-    currentUserId: v.optional(v.string()),
+    paginationOpts: paginationOptsValidator,
   },
-  returns: v.array(commentWithReactionsValidator),
-  handler: async (ctx, args) => {
-    const comments = await ctx.db
+  returns: paginationResultValidator(feedbackCommentValidator),
+  handler: (ctx, args) => ctx.db
       .query("feedbackComments")
       .withIndex("by_threadId_and_createdAt", (q) =>
         q.eq("threadId", args.threadId),
       )
       .order("asc")
-      .take(getSafeLimit(args.limit));
+      .paginate(feedbackPage(args.paginationOpts)),
+});
 
-    return await Promise.all(
-      comments.map(async (comment) => ({
-        comment,
-        reactions: await getCommentReactionSummaries(
-          ctx,
-          comment._id,
-          args.currentUserId,
-        ),
-      })),
-    );
+export const getCommentReactionsPage = query({
+  args: {
+    commentId: v.id("feedbackComments"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(reactionFactValidator),
+  handler: async (ctx, args) => {
+    const comment = await requireComment(ctx, args.commentId);
+    if (comment.isDeleted) return emptyPage<ReturnType<typeof mapReactionFact>>();
+    const result = await ctx.db.query("feedbackReactions")
+      .withIndex("by_commentId", q => q.eq("commentId", args.commentId))
+      .paginate(feedbackPage(args.paginationOpts));
+    return { ...result, page: result.page.map(mapReactionFact) };
   },
 });
 
-export const getCommentReactions = query({
+export const getCommentReactionCountsPage = query({
   args: {
     commentId: v.id("feedbackComments"),
     currentUserId: v.optional(v.string()),
+    paginationOpts: paginationOptsValidator,
   },
-  returns: v.array(reactionSummaryValidator),
+  returns: paginationResultValidator(reactionCountValidator),
   handler: async (ctx, args) => {
-    await requireComment(ctx, args.commentId);
-    return await getCommentReactionSummaries(
-      ctx,
-      args.commentId,
-      args.currentUserId,
-    );
+    const comment = await requireComment(ctx, args.commentId);
+    if (comment.isDeleted) return emptyPage<Doc<"feedbackReactionCounts"> & { includesMe: boolean }>();
+    if (comment.reactionCountsReady !== true) {
+      return emptyPage<Doc<"feedbackReactionCounts"> & { includesMe: boolean }>();
+    }
+    const result = await ctx.db.query("feedbackReactionCounts")
+      .withIndex("by_commentId", q => q.eq("commentId", args.commentId))
+      .paginate(feedbackPage(args.paginationOpts, 4));
+    const page = await Promise.all(result.page.map(async count => ({
+      ...count,
+      includesMe: args.currentUserId ? Boolean(await ctx.db.query("feedbackReactions")
+        .withIndex("by_commentId_and_emoji_and_userId", q => q.eq("commentId", args.commentId)
+          .eq("emoji", count.emoji).eq("userId", args.currentUserId!)).first()) : false,
+    })));
+    return { ...result, page };
+  },
+});
+
+/** Historical comments remain unready until their explicit initializer finishes. */
+export const getCommentReactionCountsReadiness = query({
+  args: { commentId: v.id("feedbackComments") },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const comment = await requireComment(ctx, args.commentId);
+    return comment.isDeleted || comment.reactionCountsReady === true;
   },
 });
 
@@ -864,7 +915,6 @@ export const toggleReaction = mutation({
   },
   returns: v.object({
     added: v.boolean(),
-    reactions: v.array(reactionSummaryValidator),
   }),
   handler: async (ctx, args) => {
     const userId = normalizeUserId(args.userId);
@@ -885,6 +935,7 @@ export const toggleReaction = mutation({
     let added = false;
 
     if (existingReaction) {
+      if (existingReaction.countedInSummary) await adjustReactionCount(ctx, args.commentId, emoji, -1);
       await ctx.db.delete(existingReaction._id);
     } else {
       await ctx.db.insert("feedbackReactions", {
@@ -892,14 +943,13 @@ export const toggleReaction = mutation({
         userId,
         emoji,
         createdAt: Date.now(),
+        countedInSummary: true,
       });
+      await adjustReactionCount(ctx, args.commentId, emoji, 1);
       added = true;
     }
 
-    return {
-      added,
-      reactions: await getCommentReactionSummaries(ctx, args.commentId, userId),
-    };
+    return { added };
   },
 });
 
@@ -1470,61 +1520,66 @@ async function requireObjectiveComment(
   return comment;
 }
 
-async function deleteCommentReactions(
+async function adjustReactionCount(
   ctx: MutationCtx,
   commentId: Doc<"feedbackComments">["_id"],
+  emoji: string,
+  delta: 1 | -1,
 ) {
-  const reactions = await ctx.db
-    .query("feedbackReactions")
-    .withIndex("by_commentId", (q) => q.eq("commentId", commentId))
-    .collect();
-
-  for (const reaction of reactions) {
-    await ctx.db.delete(reaction._id);
+  const existing = await ctx.db.query("feedbackReactionCounts")
+    .withIndex("by_commentId_and_emoji", q => q.eq("commentId", commentId).eq("emoji", emoji)).first();
+  if (!existing) {
+    if (delta < 0) throw new Error("reaction count is missing");
+    await ctx.db.insert("feedbackReactionCounts", { commentId, emoji, count: 1 });
+  } else if (existing.count + delta === 0) {
+    await ctx.db.delete(existing._id);
+  } else {
+    await ctx.db.patch(existing._id, { count: existing.count + delta });
   }
 }
 
-async function getCommentReactionSummaries(
-  ctx: QueryCtx | MutationCtx,
-  commentId: Doc<"feedbackComments">["_id"],
-  currentUserId?: string,
-) {
-  const reactions = await ctx.db
-    .query("feedbackReactions")
-    .withIndex("by_commentId", (q) => q.eq("commentId", commentId))
-    .collect();
-  const reactionsByEmoji = new Map<
-    string,
-    {
-      count: number;
-      users: string[];
+/** Explicit, resumable historical initializer. Never scheduled automatically. */
+export const initializeCommentReactionCountsStep = internalMutation({
+  args: { commentId: v.id("feedbackComments") },
+  returns: v.object({ processed: v.number(), done: v.boolean() }),
+  handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment || comment.isDeleted || comment.reactionCountsReady) return { processed: 0, done: true };
+    const batch = await ctx.db.query("feedbackReactions")
+      .withIndex("by_commentId_and_counted", q => q.eq("commentId", args.commentId).eq("countedInSummary", undefined))
+      .paginate({ numItems: 20, cursor: null, maximumRowsRead: 20, maximumBytesRead: 2_000_000 });
+    for (const reaction of batch.page) {
+      await adjustReactionCount(ctx, args.commentId, reaction.emoji, 1);
+      await ctx.db.patch(reaction._id, { countedInSummary: true });
     }
-  >();
+    if (batch.isDone) await ctx.db.patch(args.commentId, { reactionCountsReady: true });
+    return { processed: batch.page.length, done: batch.isDone };
+  },
+});
 
-  for (const reaction of reactions) {
-    const existingSummary = reactionsByEmoji.get(reaction.emoji);
-
-    if (!existingSummary) {
-      reactionsByEmoji.set(reaction.emoji, {
-        count: 1,
-        users: [reaction.userId],
-      });
-      continue;
+/** Tombstone is public immediately; private reaction rows are removed in bounded steps. */
+export const cleanupDeletedCommentReactions = internalMutation({
+  args: { commentId: v.id("feedbackComments") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment?.isDeleted) return null;
+    const reactions = await ctx.db.query("feedbackReactions")
+      .withIndex("by_commentId", q => q.eq("commentId", args.commentId))
+      .paginate({ numItems: 20, cursor: null, maximumRowsRead: 20, maximumBytesRead: 2_000_000 });
+    if (reactions.page.length > 0) {
+      for (const reaction of reactions.page) await ctx.db.delete(reaction._id);
+      await ctx.scheduler.runAfter(0, internal.lib.cleanupDeletedCommentReactions, args);
+      return null;
     }
-
-    existingSummary.count += 1;
-    existingSummary.users.push(reaction.userId);
-  }
-
-  return Array.from(reactionsByEmoji.entries())
-    .sort(([leftEmoji], [rightEmoji]) => leftEmoji.localeCompare(rightEmoji))
-    .map(([emoji, summary]) => ({
-      emoji,
-      count: summary.count,
-      users: summary.users,
-      includesMe: currentUserId ? summary.users.includes(currentUserId) : false,
-    }));
-}
+    const counts = await ctx.db.query("feedbackReactionCounts")
+      .withIndex("by_commentId", q => q.eq("commentId", args.commentId))
+      .paginate({ numItems: 20, cursor: null, maximumRowsRead: 20, maximumBytesRead: 2_000_000 });
+    for (const count of counts.page) await ctx.db.delete(count._id);
+    if (!counts.isDone) await ctx.scheduler.runAfter(0, internal.lib.cleanupDeletedCommentReactions, args);
+    return null;
+  },
+});
 
 function mapThreadToLatestFeedback(thread: Doc<"feedbackThreads">) {
   return {

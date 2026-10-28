@@ -54,6 +54,7 @@ export default defineSchema({
     isDeleted: v.boolean(),
     createdAt: v.number(),
     editedAt: v.optional(v.number()),
+    reactionCountsReady: v.optional(v.boolean()),
   })
     .index("by_threadId_and_createdAt", ["threadId", "createdAt"])
     .index("by_authorId", ["authorId"]),
@@ -63,9 +64,19 @@ export default defineSchema({
     userId: v.string(),
     emoji: v.string(),
     createdAt: v.number(),
+    countedInSummary: v.optional(v.boolean()),
   })
     .index("by_commentId", ["commentId"])
+    .index("by_commentId_and_counted", ["commentId", "countedInSummary"])
     .index("by_commentId_and_emoji_and_userId", ["commentId", "emoji", "userId"]),
+
+  feedbackReactionCounts: defineTable({
+    commentId: v.id("feedbackComments"),
+    emoji: v.string(),
+    count: v.number(),
+  })
+    .index("by_commentId", ["commentId"])
+    .index("by_commentId_and_emoji", ["commentId", "emoji"]),
 
   settings: defineTable({
     key: v.string(),

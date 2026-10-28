@@ -1,7 +1,37 @@
 import './App.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
+
+function useFirstThreadComments(threadId?: string) {
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.example.listComments, threadId ? { threadId } : 'skip', { initialNumItems: 50 },
+  )
+  useEffect(() => {
+    if (threadId && status === 'CanLoadMore' && results.length < 50) loadMore(50 - results.length)
+  }, [threadId, status, results.length, loadMore])
+  return threadId && (status === 'Exhausted' || results.length >= 50) ? results.slice(0, 50) : undefined
+}
+
+function ExampleReactionChips({ commentId, onToggle }: { commentId: string; onToggle: (emoji: string) => void }) {
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.example.getCommentReactionsPage, { commentId }, { initialNumItems: 40 },
+  )
+  useEffect(() => {
+    if (status === 'CanLoadMore') loadMore(40)
+  }, [status, loadMore])
+  const counts = useMemo(() => {
+    if (status !== 'Exhausted') return undefined
+    const result = new Map<string, number>()
+    for (const row of results) result.set(row.emoji, (result.get(row.emoji) ?? 0) + 1)
+    return result
+  }, [results, status])
+  return <div className='reactionRow'>{['👍', '❤️', '👀'].map(emoji => (
+    <button key={emoji} type='button' className='reactionChip' disabled={!counts} onClick={() => onToggle(emoji)}>
+      {emoji} {counts ? counts.get(emoji) ?? 0 : '…'}
+    </button>
+  ))}</div>
+}
 
 const LOREM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 
@@ -709,12 +739,7 @@ function FeedbackDialog ({
   onClose,
 }: FeedbackDialogProps) {
   const myFeedback = useQuery(api.example.getMyFeedback, { url: pageUrl })
-  const comments = useQuery(
-    api.example.listComments,
-    myFeedback
-      ? { threadId: myFeedback.threadId, limit: 50 }
-      : 'skip',
-  )
+  const comments = useFirstThreadComments(myFeedback?.threadId)
   const upsertFeedback = useMutation(api.example.upsertFeedback)
   const addComment = useMutation(api.example.addComment)
   const toggleReaction = useMutation(api.example.toggleReaction)
@@ -786,7 +811,7 @@ function FeedbackDialog ({
   ])
 
   const visibleComments = useMemo(
-    () => comments?.filter((row) => !row.comment.isDeleted) ?? [],
+    () => comments?.filter(comment => !comment.isDeleted),
     [comments],
   )
 
@@ -1055,32 +1080,18 @@ function FeedbackDialog ({
               Thread
             </h3>
             <ul className='threadList'>
-              {visibleComments.map(({ comment, reactions }) => (
+              {visibleComments?.map(comment => (
                 <li key={comment._id} className='threadItem'>
                   <div className='threadMeta'>{comment.authorId}</div>
                   <div>{comment.body}</div>
-                  <div className='reactionRow'>
-                    {['👍', '❤️', '👀'].map((emoji) => {
-                      const r = reactions.find((x) => x.emoji === emoji)
-                      return (
-                        <button
-                          key={emoji}
-                          type='button'
-                          className='reactionChip'
-                          onClick={() =>
-                            void toggleReaction({
-                              commentId: comment._id,
-                              emoji,
-                            })}
-                        >
-                          {emoji} {r?.count ?? 0}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <ExampleReactionChips
+                    commentId={comment._id}
+                    onToggle={emoji => void toggleReaction({ commentId: comment._id, emoji })}
+                  />
                 </li>
               ))}
-              {visibleComments.length === 0 && (
+              {visibleComments === undefined && <li className='muted'>Caricamento…</li>}
+              {visibleComments?.length === 0 && (
                 <li className='muted' style={{ fontStyle: 'italic' }}>
                   Nessun messaggio nel thread.
                 </li>
@@ -1127,15 +1138,10 @@ function FeedbackDock ({
 }) {
   const myFeedback = useQuery(api.example.getMyFeedback, { url: pageUrl })
   const objectives = useQuery(api.example.listObjectivesForUrl, { url: pageUrl })
-  const comments = useQuery(
-    api.example.listComments,
-    myFeedback
-      ? { threadId: myFeedback.threadId, limit: 50 }
-      : 'skip',
-  )
+  const comments = useFirstThreadComments(myFeedback?.threadId)
 
   const commentCount =
-    comments?.filter((row) => !row.comment.isDeleted).length ?? 0
+    comments?.filter(comment => !comment.isDeleted).length
   const objectiveCount =
     objectives?.filter((objective) => objective.status === 'active').length ?? 0
 
@@ -1181,7 +1187,7 @@ function FeedbackDock ({
             onClick={() => onOpenDialog({ startAt: 'thread', presetRating: null })}
           >
             💬
-            <span className='badgeCount'>{myFeedback ? commentCount : '—'}</span>
+            <span className='badgeCount'>{myFeedback ? commentCount ?? '…' : '—'}</span>
           </button>
         </div>
         <button

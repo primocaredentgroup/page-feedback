@@ -83,7 +83,9 @@ export const {
   addObjectiveComment,
   editComment,
   deleteComment,
-  getCommentReactions,
+  getCommentReactionsPage,
+  getCommentReactionCountsPage,
+  getCommentReactionCountsReadiness,
   toggleReaction,
   getSettings,
   setSettings,
@@ -208,14 +210,24 @@ The installed component exposes these public functions:
 - `lib.upsertObjective({ objectiveId?, url, description, status, order })`
 - `lib.listIndicatorsForObjective({ objectiveId })`
 - `lib.upsertIndicator({ indicatorId?, objectiveId, description, order })`
-- `lib.listComments({ threadId, limit?, currentUserId? })`
+- `lib.listComments({ threadId, paginationOpts })` (breaking: native pagination metadata)
 - `lib.listObjectiveComments({ objectiveId, limit? })`
 - `lib.addComment({ userId, threadId, body })`
 - `lib.addObjectiveComment({ userId, objectiveId, body })`
 - `lib.editComment({ userId, commentId, body })`
 - `lib.deleteComment({ userId, commentId })`
-- `lib.getCommentReactions({ commentId, currentUserId? })`
+- `lib.getCommentReactionsPage({ commentId, paginationOpts })` (breaking: raw reaction facts in creation order)
+- `lib.getCommentReactionCountsReadiness({ commentId })` (false for historical comments until explicit initialization)
+- `lib.getCommentReactionCountsPage({ commentId, currentUserId?, paginationOpts })` (native page of exact per-emoji counts and `includesMe`; read only when ready)
 - `lib.toggleReaction({ userId, commentId, emoji })`
+
+Reaction facts preserve duplicate users and their creation order. To reconstruct the former
+`users[]` response, load all pages, group facts by emoji, then sort emoji with `localeCompare`;
+never present a partial page as a complete count. Counts for comments created by this version
+are maintained atomically. Historical comments have `ready: false` until the explicit,
+resumable internal `initializeCommentReactionCountsStep` has covered all of their reactions;
+the facts pages remain available meanwhile. No historical initializer runs automatically.
+Deleting a comment hides its reactions immediately and schedules idempotent bounded cleanup.
 - `lib.getSettings({})`
 - `lib.setSettings({ bugReportUrl?, improvementRequestUrl?, adminUserIds? })`
 - `lib.listRoles({ limit? })`

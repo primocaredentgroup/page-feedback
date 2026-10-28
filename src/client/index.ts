@@ -1,6 +1,6 @@
 import { normalizeFeedbackUrl, type UrlMode } from "../component/url.js";
 export { normalizeFeedbackUrl, type UrlMode } from "../component/url.js";
-import { httpActionGeneric, mutationGeneric, queryGeneric } from "convex/server";
+import { httpActionGeneric, mutationGeneric, queryGeneric, paginationOptsValidator } from "convex/server";
 import type { Auth, HttpRouter } from "convex/server";
 import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
@@ -524,18 +524,17 @@ export function exposeApi(
     listComments: queryGeneric({
       args: {
         threadId: v.string(),
-        limit: v.optional(v.number()),
+        paginationOpts: paginationOptsValidator,
       },
       handler: async (ctx, args) => {
-        const userId = await options.auth(ctx, {
+        await options.auth(ctx, {
           type: "readComments",
           threadId: args.threadId,
         });
 
         return await ctx.runQuery(component.lib.listComments, {
           threadId: args.threadId,
-          limit: args.limit,
-          currentUserId: userId,
+          paginationOpts: args.paginationOpts,
         });
       },
     }),
@@ -632,19 +631,45 @@ export function exposeApi(
       },
     }),
 
-    getCommentReactions: queryGeneric({
+    getCommentReactionsPage: queryGeneric({
       args: {
         commentId: v.string(),
+        paginationOpts: paginationOptsValidator,
       },
       handler: async (ctx, args) => {
-        const userId = await options.auth(ctx, {
+        await options.auth(ctx, {
           type: "readCommentReactions",
           commentId: args.commentId,
         });
 
-        return await ctx.runQuery(component.lib.getCommentReactions, {
+        return await ctx.runQuery(component.lib.getCommentReactionsPage, {
           commentId: args.commentId,
-          currentUserId: userId,
+          paginationOpts: args.paginationOpts,
+        });
+      },
+    }),
+
+    getCommentReactionCountsPage: queryGeneric({
+      args: { commentId: v.string(), paginationOpts: paginationOptsValidator },
+      handler: async (ctx, args) => {
+        const userId = await options.auth(ctx, {
+          type: "readCommentReactions", commentId: args.commentId,
+        });
+        return ctx.runQuery(component.lib.getCommentReactionCountsPage, {
+          commentId: args.commentId, currentUserId: userId,
+          paginationOpts: args.paginationOpts,
+        });
+      },
+    }),
+
+    getCommentReactionCountsReadiness: queryGeneric({
+      args: { commentId: v.string() },
+      handler: async (ctx, args) => {
+        await options.auth(ctx, {
+          type: "readCommentReactions", commentId: args.commentId,
+        });
+        return ctx.runQuery(component.lib.getCommentReactionCountsReadiness, {
+          commentId: args.commentId,
         });
       },
     }),
