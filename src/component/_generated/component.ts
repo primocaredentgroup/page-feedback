@@ -38,9 +38,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             editedAt?: number;
             isDeleted: boolean;
             isEdited: boolean;
-            reactionCountsReady?: boolean;
             threadId: string;
           };
+          reactions: Array<{
+            count: number;
+            emoji: string;
+            includesMe: boolean;
+            users: Array<string>;
+          }>;
         },
         Name
       >;
@@ -183,78 +188,27 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             editedAt?: number;
             isDeleted: boolean;
             isEdited: boolean;
-            reactionCountsReady?: boolean;
             threadId: string;
           };
-        },
-        Name
-      >;
-      getCommentReactionCountsPage: FunctionReference<
-        "query",
-        "internal",
-        {
-          commentId: string;
-          currentUserId?: string;
-          paginationOpts: {
-            cursor: string | null;
-            endCursor?: string | null;
-            id?: number;
-            maximumBytesRead?: number;
-            maximumRowsRead?: number;
-            numItems: number;
-          };
-        },
-        {
-          continueCursor: string;
-          isDone: boolean;
-          page: Array<{
-            _creationTime: number;
-            _id: string;
-            commentId: string;
+          reactions: Array<{
             count: number;
             emoji: string;
             includesMe: boolean;
+            users: Array<string>;
           }>;
-          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-          splitCursor?: string | null;
         },
         Name
       >;
-      getCommentReactionCountsReadiness: FunctionReference<
+      getCommentReactions: FunctionReference<
         "query",
         "internal",
-        { commentId: string },
-        boolean,
-        Name
-      >;
-      getCommentReactionsPage: FunctionReference<
-        "query",
-        "internal",
-        {
-          commentId: string;
-          paginationOpts: {
-            cursor: string | null;
-            endCursor?: string | null;
-            id?: number;
-            maximumBytesRead?: number;
-            maximumRowsRead?: number;
-            numItems: number;
-          };
-        },
-        {
-          continueCursor: string;
-          isDone: boolean;
-          page: Array<{
-            _creationTime: number;
-            _id: string;
-            commentId: string;
-            createdAt: number;
-            emoji: string;
-            userId: string;
-          }>;
-          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-          splitCursor?: string | null;
-        },
+        { commentId: string; currentUserId?: string },
+        Array<{
+          count: number;
+          emoji: string;
+          includesMe: boolean;
+          users: Array<string>;
+        }>,
         Name
       >;
       getMyFeedback: FunctionReference<
@@ -357,21 +311,9 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listComments: FunctionReference<
         "query",
         "internal",
-        {
-          paginationOpts: {
-            cursor: string | null;
-            endCursor?: string | null;
-            id?: number;
-            maximumBytesRead?: number;
-            maximumRowsRead?: number;
-            numItems: number;
-          };
-          threadId: string;
-        },
-        {
-          continueCursor: string;
-          isDone: boolean;
-          page: Array<{
+        { currentUserId?: string; limit?: number; threadId: string },
+        Array<{
+          comment: {
             _creationTime: number;
             _id: string;
             authorId: string;
@@ -380,12 +322,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             editedAt?: number;
             isDeleted: boolean;
             isEdited: boolean;
-            reactionCountsReady?: boolean;
             threadId: string;
+          };
+          reactions: Array<{
+            count: number;
+            emoji: string;
+            includesMe: boolean;
+            users: Array<string>;
           }>;
-          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-          splitCursor?: string | null;
-        },
+        }>,
         Name
       >;
       listFeedbackVersions: FunctionReference<
@@ -645,7 +590,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { commentId: string; emoji: string; userId: string },
-        { added: boolean },
+        {
+          added: boolean;
+          reactions: Array<{
+            count: number;
+            emoji: string;
+            includesMe: boolean;
+            users: Array<string>;
+          }>;
+        },
         Name
       >;
       upsertFeedback: FunctionReference<

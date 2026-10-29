@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { convexTest } from 'convex-test'
 import { api } from './_generated/api.js'
 import schema from './schema.js'
@@ -168,11 +168,6 @@ describe('feedback-page component', () => {
       commentId: createdComment.comment._id,
       emoji: '👍',
     })
-    const firstCount = await t.query(api.lib.getCommentReactionCountsPage, {
-      commentId: createdComment.comment._id,
-      currentUserId: 'user_1',
-      paginationOpts: { numItems: 10, cursor: null },
-    })
     const secondReaction = await t.mutation(api.lib.toggleReaction, {
       userId: 'user_1',
       commentId: createdComment.comment._id,
@@ -181,7 +176,8 @@ describe('feedback-page component', () => {
 
     const comments = await t.query(api.lib.listComments, {
       threadId: feedback.threadId,
-      paginationOpts: { numItems: 10, cursor: null },
+      limit: 10,
+      currentUserId: 'user_1',
     })
 
     await expect(
@@ -191,39 +187,31 @@ describe('feedback-page component', () => {
       }),
     ).rejects.toThrow('you can only delete your own comments')
 
-    vi.useFakeTimers()
     await t.mutation(api.lib.deleteComment, {
       userId: 'user_2',
       commentId: createdComment.comment._id,
     })
-    await t.finishAllScheduledFunctions(() => vi.runAllTimers())
-    vi.useRealTimers()
 
     const commentsAfterDelete = await t.query(api.lib.listComments, {
       threadId: feedback.threadId,
-      paginationOpts: { numItems: 10, cursor: null },
-    })
-    const reactionsAfterDelete = await t.query(api.lib.getCommentReactionsPage, {
-      commentId: createdComment.comment._id,
-      paginationOpts: { numItems: 10, cursor: null },
+      limit: 10,
+      currentUserId: 'user_1',
     })
 
     expect(updatedComment.comment.body).toBe('I strongly agree with this note')
     expect(updatedComment.comment.isEdited).toBe(true)
     expect(firstReaction.added).toBe(true)
-    expect(await t.query(api.lib.getCommentReactionCountsReadiness, {
-      commentId: createdComment.comment._id,
-    })).toBe(true)
-    expect(firstCount.page[0]).toMatchObject({
+    expect(firstReaction.reactions[0]).toMatchObject({
       emoji: '👍',
       count: 1,
       includesMe: true,
     })
     expect(secondReaction.added).toBe(false)
-    expect(comments.page).toHaveLength(1)
-    expect(commentsAfterDelete.page[0].isDeleted).toBe(true)
-    expect(commentsAfterDelete.page[0].body).toBe('[deleted]')
-    expect(reactionsAfterDelete.page).toEqual([])
+    expect(comments).toHaveLength(1)
+    expect(comments[0].reactions).toEqual([])
+    expect(commentsAfterDelete[0].comment.isDeleted).toBe(true)
+    expect(commentsAfterDelete[0].comment.body).toBe('[deleted]')
+    expect(commentsAfterDelete[0].reactions).toEqual([])
   })
 
   test('stores shared objectives, indicators and objective comments per normalized url', async () => {

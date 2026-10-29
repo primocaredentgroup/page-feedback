@@ -2,7 +2,7 @@ import { mutation, query } from "./_generated/server.js";
 import { components } from "./_generated/api.js";
 import { exposeApi } from "../../src/client/index.js";
 import { v } from "convex/values";
-import { paginationOptsValidator, type Auth } from "convex/server";
+import type { Auth } from "convex/server";
 
 const ratingValidator = v.union(
   v.literal(1),
@@ -59,22 +59,14 @@ export const listPageFeedback = query({
 export const listThreadComments = query({
   args: {
     threadId: v.string(),
-    paginationOpts: paginationOptsValidator,
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await getAuthUserId(ctx);
     return await ctx.runQuery(components.pageFeedback.lib.listComments, {
       threadId: args.threadId,
-      paginationOpts: args.paginationOpts,
+      limit: args.limit,
+      currentUserId: await getAuthUserId(ctx),
     });
-  },
-});
-
-export const listThreadCommentReactions = query({
-  args: { commentId: v.string(), paginationOpts: paginationOptsValidator },
-  handler: async (ctx, args) => {
-    await getAuthUserId(ctx);
-    return ctx.runQuery(components.pageFeedback.lib.getCommentReactionsPage, args);
   },
 });
 
@@ -148,7 +140,6 @@ export const {
   completeRoleTestWithFeedback,
   listMyFeedbackThreads,
   listComments,
-  getCommentReactionsPage,
   listObjectiveComments,
   addComment,
   addObjectiveComment,

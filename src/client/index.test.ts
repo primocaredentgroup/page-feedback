@@ -26,8 +26,6 @@ export const {
   completeRoleTestWithFeedback,
   listMyFeedbackThreads,
   listComments,
-  getCommentReactionCountsPage,
-  getCommentReactionCountsReadiness,
   listObjectiveComments,
   addComment,
   addObjectiveComment,
@@ -87,8 +85,6 @@ const testApi = (
       throwingAdminUpsertRole: typeof throwingAdminUpsertRole;
       listMyFeedbackThreads: typeof listMyFeedbackThreads;
       listComments: typeof listComments;
-      getCommentReactionCountsPage: typeof getCommentReactionCountsPage;
-      getCommentReactionCountsReadiness: typeof getCommentReactionCountsReadiness;
       listObjectiveComments: typeof listObjectiveComments;
       addComment: typeof addComment;
       addObjectiveComment: typeof addObjectiveComment;
@@ -179,19 +175,12 @@ describe('client tests', () => {
 
     const comments = await t.query(testApi.listComments, {
       threadId: feedback.threadId,
-      paginationOpts: { numItems: 10, cursor: null },
-    })
-    const counts = await t.query(testApi.getCommentReactionCountsPage, {
-      commentId: createdComment.comment._id,
-      paginationOpts: { numItems: 10, cursor: null },
+      limit: 10,
     })
 
     expect(reaction.added).toBe(true)
-    expect(comments.page[0].body).toBe('Can we simplify this section?')
-    expect(await t.query(testApi.getCommentReactionCountsReadiness, {
-      commentId: createdComment.comment._id,
-    })).toBe(true)
-    expect(counts.page[0]).toMatchObject({
+    expect(comments[0].comment.body).toBe('Can we simplify this section?')
+    expect(comments[0].reactions[0]).toMatchObject({
       emoji: '👀',
       count: 1,
       includesMe: true,

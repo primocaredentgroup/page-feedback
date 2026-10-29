@@ -9,7 +9,7 @@
   "bugs": {
     "url": "https://github.com/primocaredentgroup/page-feedback/issues"
   },
-  "version": "1.3.1",
+  "version": "1.3.2",
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
